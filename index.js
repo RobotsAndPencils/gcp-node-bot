@@ -26,6 +26,7 @@ var bot = controller.spawn({
 })
 
 console.log("project id: " + gcpJson.project_id);
+console.log("project key: " + gcpJson.private_key);
 
 var gcloud = require('gcloud')({
   projectId: gcpJson.project_id,
@@ -51,7 +52,7 @@ controller.hears(['gcpbot projects'], ['message_received','ambient'], function (
   resource.getProjects(function(err, projects) {
 
     if( err ) {
-      console.log( err );
+      console.log( "error message on get projects: " + err );
     }
 
     // `projects` is an array of `Project` objects.
