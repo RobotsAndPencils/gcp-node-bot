@@ -22,6 +22,10 @@ controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!")
 })
 
+controller.hears(['gcpbot projects'], ['message_received','ambient'], function (bot, message) {
+  bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
+})
+
 controller.hears(['hello', 'hi'], ['direct_mention'], function (bot, message) {
   bot.reply(message, 'Hello.')
 })
