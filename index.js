@@ -32,7 +32,7 @@ var gcloud = require('gcloud')({
   projectId: gcpJson.project_id,
   credentials: {
       private_key: gcpJson.private_key,
-      //client_email: gcpJson.client_email
+      client_email: gcpJson.client_email
   }
 });
 
