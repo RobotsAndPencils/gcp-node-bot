@@ -7,10 +7,31 @@ if (!slackToken) {
   process.exit(1)
 }
 
+var gcpJson = {
+    type: "service_account",
+    project_id: process.env.PROJECT_ID,
+    private_key_id: process.env.PRIVATE_KEY_ID,
+    private_key: process.env.PRIVATE_KEY,
+    client_email: process.env.CLIENT_EMAIL,
+    client_id: process.env.CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://accounts.google.com/o/oauth2/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/gcp-bot-test%40gcp-bot-test.iam.gserviceaccount.com"
+}
+
 var controller = Botkit.slackbot()
 var bot = controller.spawn({
   token: slackToken
 })
+
+var gcloud = require('gcloud')({
+  projectId: gcpJson.project_id,
+  credentials: {
+      private_key: gcpJson.private_key,
+      client_email: gcpJson.client_email
+  }
+});
 
 bot.startRTM(function (err, bot, payload) {
   if (err) {
@@ -23,7 +44,14 @@ controller.on('bot_channel_join', function (bot, message) {
 })
 
 controller.hears(['gcpbot projects'], ['message_received','ambient'], function (bot, message) {
-  bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
+  //bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
+  var resource = gcloud.resource();
+  resource.getProjects(function(err, projects) {
+    // `projects` is an array of `Project` objects.
+    for ( i = 0; i < projects.length; i++ ) {
+      bot.reply(message, "Project " + i + " with id " + projects[i].id);
+    }
+  });
 })
 
 controller.hears(['gcpbot help'], ['message_received','ambient'], function (bot, message) {
