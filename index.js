@@ -25,6 +25,8 @@ var bot = controller.spawn({
   token: slackToken
 })
 
+console.log("project id: " + gcpJson.project_id);
+
 var gcloud = require('gcloud')({
   projectId: gcpJson.project_id,
   credentials: {
@@ -47,6 +49,11 @@ controller.hears(['gcpbot projects'], ['message_received','ambient'], function (
   //bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
   var resource = gcloud.resource();
   resource.getProjects(function(err, projects) {
+
+    if( err ) {
+      console.log( err );
+    }
+
     // `projects` is an array of `Project` objects.
     for ( i = 0; i < projects.length; i++ ) {
       bot.reply(message, "Project " + i + " with id " + projects[i].id);
