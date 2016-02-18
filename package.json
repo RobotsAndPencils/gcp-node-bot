@@ -25,6 +25,7 @@
     "botkit": "0.0.5",
     "gcloud": "^0.28.0",
     "googleapis": "^2.1.7",
-    "jsonfile": "^2.2.3"
+    "jsonfile": "^2.2.3",
+    "request": "^2.69.0"
   }
 }
