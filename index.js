@@ -1,5 +1,8 @@
 var Botkit = require('botkit')
 var jsonfile = require('jsonfile')
+var querystring = require('querystring');
+var http = require('http');
+var request = require('request');
 
 var tokenfile = '/tmp/gcp-token.json'
 
@@ -10,6 +13,11 @@ if (!slackToken) {
   process.exit(1)
 }
 
+// id: 1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com
+// secret: ahhGUn-FY75NCdmUdI2FZZJN
+
+
+/*
 var gcpJson = {
     type: "service_account",
     project_id: process.env.PROJECT_ID,
@@ -23,11 +31,6 @@ var gcpJson = {
     client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/gcp-bot-test%40gcp-bot-test.iam.gserviceaccount.com"
 }
 
-var controller = Botkit.slackbot()
-var bot = controller.spawn({
-  token: slackToken
-})
-
 jsonfile.writeFile(tokenfile, gcpJson, function (err) {
   console.error(err)
 })
@@ -36,6 +39,14 @@ var gcloud = require('gcloud')({
   projectId: gcpJson.project_id,
   keyFilename: tokenfile
 });
+*/
+
+var controller = Botkit.slackbot()
+var bot = controller.spawn({
+  token: slackToken
+})
+
+
 
 bot.startRTM(function (err, bot, payload) {
   if (err) {
@@ -49,18 +60,42 @@ controller.on('bot_channel_join', function (bot, message) {
 
 controller.hears(['gcpbot projects'], ['message_received','ambient'], function (bot, message) {
   //bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
-  var resource = gcloud.resource();
-  resource.getProjects(function(err, projects) {
 
-    if( err ) {
-      console.log( "error message on get projects: " + err );
-    }
-
-    // `projects` is an array of `Project` objects.
-    for ( i = 0; i < projects.length; i++ ) {
-      bot.reply(message, "Project " + i + " with id " + projects[i].id);
-    }
+  //first post to oauth to get device code
+  // Build the post string from an object
+  var post_data = querystring.stringify({
+      'client_id': '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'
   });
+
+  // An object of options to indicate where to post to
+  var post_options = {
+      host: 'accounts.google.com',
+      port: '80',
+      path: '/o/oauth2/device/code',
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(post_data)
+      }
+  };
+
+  request({
+    url: 'http://accounts.google.com/o/oauth2/device/code', //URL to hit
+    qs: {client_id: '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'}, //Query string data
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': Buffer.byteLength(post_data)
+    } //,
+    //body: 'Hello Hello! String body!' //Set the body as a string
+}, function(error, response, body){
+    if(error) {
+        console.log(error);
+    } else {
+        console.log(response.statusCode, body);
+    }
+});
+
 })
 
 controller.hears(['gcpbot help'], ['message_received','ambient'], function (bot, message) {
