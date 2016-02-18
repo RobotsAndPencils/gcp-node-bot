@@ -67,18 +67,6 @@ controller.hears(['gcpbot projects'], ['message_received','ambient'], function (
       'client_id': '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'
   });
 
-  // An object of options to indicate where to post to
-  var post_options = {
-      host: 'accounts.google.com',
-      port: '80',
-      path: '/o/oauth2/device/code',
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(post_data)
-      }
-  };
-
   request({
     url: 'http://accounts.google.com/o/oauth2/device/code', //URL to hit
     qs: {client_id: '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'}, //Query string data
@@ -86,8 +74,8 @@ controller.hears(['gcpbot projects'], ['message_received','ambient'], function (
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Content-Length': Buffer.byteLength(post_data)
-    } //,
-    //body: 'Hello Hello! String body!' //Set the body as a string
+    },
+    body: JSON.stringify({scope: 'email profile', client_id: '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'}) //Set the body as a string
 }, function(error, response, body){
     if(error) {
         console.log(error);
