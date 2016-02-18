@@ -23,6 +23,7 @@
   "homepage": "https://github.com/beepboophq/node-slack-bot#readme",
   "dependencies": {
     "botkit": "0.0.5",
-    "gcloud": "^0.28.0"
+    "gcloud": "^0.28.0",
+    "jsonfile": "^2.2.3"
   }
 }

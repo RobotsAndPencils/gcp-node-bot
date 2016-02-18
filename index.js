@@ -1,4 +1,7 @@
 var Botkit = require('botkit')
+var jsonfile = require('jsonfile')
+
+var tokenfile = '/tmp/gcp-token.json'
 
 // Expect a SLACK_TOKEN environment variable
 var slackToken = process.env.SLACK_TOKEN
@@ -25,15 +28,13 @@ var bot = controller.spawn({
   token: slackToken
 })
 
-console.log("project id: " + gcpJson.project_id);
-console.log("project key: " + gcpJson.private_key);
+jsonfile.writeFile(tokenfile, gcpJson, function (err) {
+  console.error(err)
+})
 
 var gcloud = require('gcloud')({
   projectId: gcpJson.project_id,
-  credentials: {
-      private_key: gcpJson.private_key,
-      client_email: gcpJson.client_email
-  }
+  keyFilename: tokenfile
 });
 
 bot.startRTM(function (err, bot, payload) {
