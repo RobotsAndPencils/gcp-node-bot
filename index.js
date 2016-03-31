@@ -3,8 +3,10 @@ var jsonfile = require('jsonfile')
 var querystring = require('querystring');
 var http = require('http');
 var request = require('request');
-
-var tokenfile = '/tmp/gcp-token.json'
+var google = require('googleapis');
+var manager = google.deploymentmanager('v2');
+var monitoring = google.cloudmonitoring('v2beta2');
+var compute = google.compute('v1');
 
 // Expect a SLACK_TOKEN environment variable
 var slackToken = process.env.SLACK_TOKEN
@@ -15,38 +17,25 @@ if (!slackToken) {
 
 // id: 1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com
 // secret: ahhGUn-FY75NCdmUdI2FZZJN
-
-
-/*
-var gcpJson = {
-    type: "service_account",
-    project_id: process.env.PROJECT_ID,
-    private_key_id: process.env.PRIVATE_KEY_ID,
-    private_key: process.env.PRIVATE_KEY,
-    client_email: process.env.CLIENT_EMAIL,
-    client_id: process.env.CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://accounts.google.com/o/oauth2/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/gcp-bot-test%40gcp-bot-test.iam.gserviceaccount.com"
-}
-
-jsonfile.writeFile(tokenfile, gcpJson, function (err) {
-  console.error(err)
-})
+var keyfile = 'gcp-bot-test-9c7dbb93f7ba.json';
 
 var gcloud = require('gcloud')({
-  projectId: gcpJson.project_id,
-  keyFilename: tokenfile
+  projectId: process.env.PROJECT_ID,
+  keyFilename: keyfile
 });
-*/
+
+var key = require("./" + keyfile);
+var jwtClient = new google.auth.JWT(key.client_email, null, key.private_key,
+  [
+    'https://www.googleapis.com/auth/ndev.cloudman',
+    'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/monitoring',
+  ], null);
 
 var controller = Botkit.slackbot()
 var bot = controller.spawn({
   token: slackToken
 })
-
-
 
 bot.startRTM(function (err, bot, payload) {
   if (err) {
@@ -58,50 +47,244 @@ controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!")
 })
 
-controller.hears(['gcpbot projects'], ['message_received','ambient'], function (bot, message) {
-  //bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
+controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
 
-  //first post to oauth to get device code
-  // Build the post string from an object
-  var post_data = querystring.stringify({
-      'client_id': '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'
+  jwtClient.authorize(function(err, tokens) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    monitoring.metricDescriptors.list({
+      auth: jwtClient,
+      project: 'gcp-bot-test',
+      count: 100 },
+      //metric: 'compute.googleapis.com/instance/uptime',
+      //youngest: new Date().toJSON()},
+      function( err, resp ) {
+
+        if( err ) {
+          console.log(err);
+          return;
+        }
+
+        //console.log( "resp: " + JSON.stringify(resp) );
+
+        metrics = resp.metrics;
+
+        console.log("metrics: " + metrics.length);
+
+        for( i = 0; i < metrics.length; i++ ) {
+          //console.log(metrics[i].name + " desc: " + metrics[i].description );
+        }
+
+      }
+    );
+
+    //compute.googleapis.com/instance/cpu/utilization
   });
 
-  request({
-    url: 'http://accounts.google.com/o/oauth2/device/code', //URL to hit
-    qs: {client_id: '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'}, //Query string data
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Content-Length': Buffer.byteLength(post_data)
-    },
-    body: JSON.stringify({scope: 'email profile', client_id: '1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com'}) //Set the body as a string
-}, function(error, response, body){
-    if(error) {
-        console.log(error);
-    } else {
-        console.log(response.statusCode, body);
+  jwtClient.authorize(function(err, tokens) {
+    if (err) {
+      console.log(err);
+      return;
     }
+
+    compute.instances.list({
+      auth: jwtClient,
+      project: 'gcp-bot-test',
+      zone: 'us-central1-a'},
+      function( err, resp ) {
+
+        if( err ) {
+          console.log(err);
+          return;
+        }
+
+        console.log( "resp: " + JSON.stringify(resp) );
+      }
+    );
+  });
+
 });
 
+controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], function (bot, message) {
+
+  var depId = message.match[1].trim();
+
+  jwtClient.authorize(function(err, tokens) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    bot.reply(message, "Deployment detail for deployment " + depId);
+
+    var filterStr = 'name eq ' + depId;
+
+    // Make an authorized request to list Drive files.
+    manager.deployments.list({
+      auth: jwtClient,
+      project: 'gcp-bot-test',
+      region: 'us-central1',
+      filter: filterStr },
+      function(err, resp) {
+        if( err) {
+          console.log(err);
+          return;
+        }
+
+        if( !resp.deployments ) {
+          bot.reply(message, "no deployment found");
+          return;
+        }
+
+        bot.reply(message, "Deploy " +
+        resp.deployments[0].name + " COMPLETE: started at " +
+        resp.deployments[0].operation.startTime + " by " +
+        resp.deployments[0].operation.user + " ---- deployment completed at " +
+        resp.deployments[0].operation.endTime );
+
+      });
+  });
+});
+
+controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'], function (bot, message) {
+  //bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
+
+    var user = message.match[1].trim();
+
+    var email = user.substring( user.indexOf(':') + 1, user.indexOf('|'));
+    console.log(email);
+
+    jwtClient.authorize(function(err, tokens) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      bot.reply(message, "Deployment summary for " + email);
+
+      var filterStr = 'operation.user eq ' + email;
+
+      // Make an authorized request to list Drive files.
+      manager.deployments.list({
+        auth: jwtClient,
+        project: 'gcp-bot-test',
+        region: 'us-central1',
+        filter: filterStr },
+        function(err, resp) {
+          if( err) {
+            console.log(err);
+            return;
+          }
+
+          if( !resp.deployments ) {
+            bot.reply(message, "no deployments to report on");
+            return;
+          }
+
+          var deployTotalCount = resp.deployments.length;
+          var deployActiveCount = 0;
+
+          var activeDeploys = [];
+          var deadDeploys = [];
+
+
+          for ( i = 0; i < resp.deployments.length; i++ ) {
+              if( resp.deployments[i].operation.status != 'DONE' ) {
+                deployActiveCount++;
+                activeDeploys.push( resp.deployments[i] );
+              }
+              else {
+                deadDeploys.push( resp.deployments[i] );
+              }
+          }
+
+          bot.reply(message, "deployment total count: " + deployTotalCount);
+          bot.reply(message, "deployments active: " + deployActiveCount);
+
+          for ( i = 0; i < activeDeploys.length; i++ ) {
+            bot.reply(message, "Deploy " +
+              activeDeploys[i].name + " with id " + activeDeploys[i].id + " Active: started at " +
+              activeDeploys[i].operation.startTime + " by " +
+              activeDeploys[i].operation.user + " ---- deployment is " +
+              activeDeploys[i].operation.progress + " percent complete. To view progress, navigate to " +
+              " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID );
+          }
+
+          for ( i = 0; i < deadDeploys.length; i++ ) {
+            bot.reply(message, "Deploy " +
+              deadDeploys[i].name + " with id " + deadDeploys[i].id + " COMPLETE: started at " +
+              deadDeploys[i].operation.startTime + " by " +
+              deadDeploys[i].operation.user + " ---- deployment completed at " +
+              deadDeploys[i].operation.endTime );
+          }
+        });
+    });
 })
 
-controller.hears(['gcpbot help'], ['message_received','ambient'], function (bot, message) {
-  bot.reply(message, 'Here, you will find details on what the gcp bot can do')
+// DEPLOYMENT of a file from github
+controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
+
+  var ghPref = 'https://github.com/';
+  var rawMaster = '/raw/master/';
+
+  //parse the stuff from inbound
+  var repo = message.match[1].trim();
+  var yaml = message.match[2].trim();
+
+  var fullPath = ghPref + repo + rawMaster + yaml + ".yaml";
+
+  //get the file, use it as the resource info supplied to the insert cmd in gcp
+  var resContent = "";
+
+  request(fullPath, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      resContent = body;
+
+      //now print content
+      console.log("content found: " + resContent);
+
+      //now do the auth and call to manifest
+      jwtClient.authorize(function(err, tokens) {
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        manager.deployments.insert({
+          auth: jwtClient,
+          project: 'gcp-bot-test',
+          //TODO ADD THE RESOURCE HERE
+          resource: {
+            name: yaml + Math.floor(new Date() / 1000),
+            target: {
+              config: {
+                content: resContent//"resources:\n- name: vm-created-by-cloud-config\n  type: compute.v1.instance\n  properties:\n    zone: us-central1-a\n    machineType: https://www.googleapis.com/compute/v1/projects/gcp-bot-test/zones/us-central1-a/machineTypes/n1-standard-1\n    disks:\n    - deviceName: boot\n      type: PERSISTENT\n      boot: true\n      autoDelete: true\n      initializeParams:\n        diskName: disk-created-by-cloud-config\n        sourceImage: https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/debian-7-wheezy-v20151104\n    networkInterfaces:\n    - network: https://www.googleapis.com/compute/v1/projects/gcp-bot-test/global/networks/default\n"//resContent
+              }
+            }
+          }
+         },
+          function( err, resp ) {
+
+            if( err ) {
+              console.log(err);
+              return;
+            }
+
+            console.log(resp);
+          }
+        );
+
+      });
+    }
+  })
+
+
+
 })
 
-controller.hears(['hello', 'hi'], ['direct_mention'], function (bot, message) {
-  bot.reply(message, 'Hello.')
-})
-
-controller.hears(['hello', 'hi'], ['direct_message'], function (bot, message) {
-  bot.reply(message, 'Hello.')
-  bot.reply(message, 'It\'s nice to talk to you directly.')
-})
-
-controller.hears('.*', ['mention'], function (bot, message) {
-  bot.reply(message, 'You really do care about me. :heart:')
-})
 
 controller.hears('help', ['direct_message', 'direct_mention'], function (bot, message) {
   var help = 'I will respond to the following messages: \n' +
