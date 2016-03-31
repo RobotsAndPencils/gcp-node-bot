@@ -42,71 +42,53 @@ bot.startRTM(function (err, bot, payload) {
     throw new Error('Could not connect to Slack')
   }
 })
+/*
+var deployCheck = function( jwtClient, deployName, bot, message ) {
 
+  console.log("in deployCheck");
+
+  var filterStr = 'name eq ' + deployName;
+
+  bot.reply( message, "checking on " + deployName );
+
+  return manager.deployments.list({
+    auth: jwtClient,
+    project: 'gcp-bot-test',
+    region: 'us-central1',
+    filter: filterStr },
+    function(err, resp) {
+      if( err) {
+        console.log(err);
+        return;
+      }
+
+      if( !resp.deployments ) {
+        //bot.reply(message, "no deployment found");
+        return;
+      }
+
+      var currDeploy = resp.deployments[0];
+
+    messageRet = "Deploy " +
+      currDeploy.name + " is " + currDeploy.operation.status + " started at " +
+      currDeploy.operation.startTime + " by " +
+      currDeploy.operation.user + " ---- deployment completed at " +
+      currDeploy.operation.endTime );
+
+      if( currDeploy.operation.status != "DONE" ) {
+        messageRet += "\nCurrent progress: " + currDeploy.operation.progress;
+      }
+
+      return currDeploy.operation.progress;
+
+    });
+}
+*/
 controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!")
 })
 
-controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
 
-  jwtClient.authorize(function(err, tokens) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    monitoring.metricDescriptors.list({
-      auth: jwtClient,
-      project: 'gcp-bot-test',
-      count: 100 },
-      //metric: 'compute.googleapis.com/instance/uptime',
-      //youngest: new Date().toJSON()},
-      function( err, resp ) {
-
-        if( err ) {
-          console.log(err);
-          return;
-        }
-
-        //console.log( "resp: " + JSON.stringify(resp) );
-
-        metrics = resp.metrics;
-
-        console.log("metrics: " + metrics.length);
-
-        for( i = 0; i < metrics.length; i++ ) {
-          //console.log(metrics[i].name + " desc: " + metrics[i].description );
-        }
-
-      }
-    );
-
-    //compute.googleapis.com/instance/cpu/utilization
-  });
-
-  jwtClient.authorize(function(err, tokens) {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    compute.instances.list({
-      auth: jwtClient,
-      project: 'gcp-bot-test',
-      zone: 'us-central1-a'},
-      function( err, resp ) {
-
-        if( err ) {
-          console.log(err);
-          return;
-        }
-
-        console.log( "resp: " + JSON.stringify(resp) );
-      }
-    );
-  });
-
-});
 
 controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], function (bot, message) {
 
@@ -120,32 +102,7 @@ controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], 
 
     bot.reply(message, "Deployment detail for deployment " + depId);
 
-    var filterStr = 'name eq ' + depId;
-
-    // Make an authorized request to list Drive files.
-    manager.deployments.list({
-      auth: jwtClient,
-      project: 'gcp-bot-test',
-      region: 'us-central1',
-      filter: filterStr },
-      function(err, resp) {
-        if( err) {
-          console.log(err);
-          return;
-        }
-
-        if( !resp.deployments ) {
-          bot.reply(message, "no deployment found");
-          return;
-        }
-
-        bot.reply(message, "Deploy " +
-        resp.deployments[0].name + " COMPLETE: started at " +
-        resp.deployments[0].operation.startTime + " by " +
-        resp.deployments[0].operation.user + " ---- deployment completed at " +
-        resp.deployments[0].operation.endTime );
-
-      });
+    checkDeploy(bot, message, jwtClient, depId );
   });
 });
 
@@ -253,15 +210,16 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
           return;
         }
 
+        var depName = yaml + Math.floor(new Date() / 1000);
+
         manager.deployments.insert({
           auth: jwtClient,
           project: 'gcp-bot-test',
-          //TODO ADD THE RESOURCE HERE
           resource: {
-            name: yaml + Math.floor(new Date() / 1000),
+            name: depName,
             target: {
               config: {
-                content: resContent//"resources:\n- name: vm-created-by-cloud-config\n  type: compute.v1.instance\n  properties:\n    zone: us-central1-a\n    machineType: https://www.googleapis.com/compute/v1/projects/gcp-bot-test/zones/us-central1-a/machineTypes/n1-standard-1\n    disks:\n    - deviceName: boot\n      type: PERSISTENT\n      boot: true\n      autoDelete: true\n      initializeParams:\n        diskName: disk-created-by-cloud-config\n        sourceImage: https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/debian-7-wheezy-v20151104\n    networkInterfaces:\n    - network: https://www.googleapis.com/compute/v1/projects/gcp-bot-test/global/networks/default\n"//resContent
+                content: resContent
               }
             }
           }
@@ -273,7 +231,9 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
               return;
             }
 
-            console.log(resp);
+            var complete = false;
+
+            checkDeploy(bot, message, jwtClient, depName );
           }
         );
 
@@ -285,6 +245,57 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
 
 })
 
+function checkDeploy( bot, message, jwtClient, depName ) {
+
+  var status = "";
+  var filterStr = 'name eq ' + depName;
+
+  return manager.deployments.list({
+    auth: jwtClient,
+    project: 'gcp-bot-test',
+    region: 'us-central1',
+    filter: filterStr },
+    function(err, resp) {
+      if( err) {
+        console.log(err);
+        return;
+      }
+
+      if( !resp.deployments ) {
+        bot.reply(message, "no deployment found");
+        return;
+      }
+
+      var currDeploy = resp.deployments[0];
+
+      bot.reply(message, "Deploy " +
+        currDeploy.name + " status = " + currDeploy.operation.status + " : started at " +
+        currDeploy.operation.startTime + " by " +
+        currDeploy.operation.user + " ---- deployment completed at " +
+        currDeploy.operation.endTime );
+
+      if( currDeploy.operation.status != "DONE" && currDeploy.operation.status != "COMPLETE" ) {
+        bot.reply(message, "Current progress: " + currDeploy.operation.progress);
+
+        //sleep
+        sleep( 2000 );
+
+        checkDeploy( bot, message, jwtClient, depName );
+      }
+      else {
+        return;
+      }
+    });
+
+    //return status;
+}
+
+function sleep(miliseconds) {
+   var currentTime = new Date().getTime();
+
+   while (currentTime + miliseconds >= new Date().getTime()) {
+   }
+}
 
 controller.hears('help', ['direct_message', 'direct_mention'], function (bot, message) {
   var help = 'I will respond to the following messages: \n' +
@@ -317,3 +328,64 @@ controller.hears(['attachment'], ['direct_message', 'direct_mention'], function 
 controller.hears('.*', ['direct_message', 'direct_mention'], function (bot, message) {
   bot.reply(message, 'Sorry <@' + message.user + '>, I don\'t understand. \n')
 })
+
+controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
+
+  jwtClient.authorize(function(err, tokens) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    monitoring.metricDescriptors.list({
+      auth: jwtClient,
+      project: 'gcp-bot-test',
+      count: 100 },
+      //metric: 'compute.googleapis.com/instance/uptime',
+      //youngest: new Date().toJSON()},
+      function( err, resp ) {
+
+        if( err ) {
+          console.log(err);
+          return;
+        }
+
+        //console.log( "resp: " + JSON.stringify(resp) );
+
+        metrics = resp.metrics;
+
+        console.log("metrics: " + metrics.length);
+
+        for( i = 0; i < metrics.length; i++ ) {
+          //console.log(metrics[i].name + " desc: " + metrics[i].description );
+        }
+
+      }
+    );
+
+    //compute.googleapis.com/instance/cpu/utilization
+  });
+
+  jwtClient.authorize(function(err, tokens) {
+    if (err) {
+      console.log(err);
+      return;
+    }
+
+    compute.instances.list({
+      auth: jwtClient,
+      project: 'gcp-bot-test',
+      zone: 'us-central1-a'},
+      function( err, resp ) {
+
+        if( err ) {
+          console.log(err);
+          return;
+        }
+
+        console.log( "resp: " + JSON.stringify(resp) );
+      }
+    );
+  });
+
+});
