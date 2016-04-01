@@ -236,13 +236,9 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
             checkDeploy(bot, message, jwtClient, depName );
           }
         );
-
       });
     }
   })
-
-
-
 })
 
 function checkDeploy( bot, message, jwtClient, depName ) {
@@ -277,7 +273,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
       if( currDeploy.operation.status != "DONE" && currDeploy.operation.status != "COMPLETE" ) {
         bot.reply(message, "Current progress: " + currDeploy.operation.progress);
 
-        //sleep
+        //sorry for the horrible hack here
         sleep( 2000 );
 
         checkDeploy( bot, message, jwtClient, depName );
@@ -286,10 +282,9 @@ function checkDeploy( bot, message, jwtClient, depName ) {
         return;
       }
     });
-
-    //return status;
 }
 
+//nothing to see here...
 function sleep(miliseconds) {
    var currentTime = new Date().getTime();
 
@@ -297,37 +292,15 @@ function sleep(miliseconds) {
    }
 }
 
-controller.hears('help', ['direct_message', 'direct_mention'], function (bot, message) {
+controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, message) {
   var help = 'I will respond to the following messages: \n' +
-      '`bot hi` for a simple message.\n' +
-      '`bot attachment` to see a Slack attachment message.\n' +
-      '`@<your bot\'s name>` to demonstrate detecting a mention.\n' +
-      '`bot help` to see this again.'
+      '`gcpbot deploy summary` for a list of all deployment manager jobs and their status.\n' +
+      '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
+      '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
+      '`gcpbot help` to see this again.'
   bot.reply(message, help)
 })
 
-controller.hears(['attachment'], ['direct_message', 'direct_mention'], function (bot, message) {
-  var text = 'Beep Beep Boop is a ridiculously simple hosting platform for your Slackbots.'
-  var attachments = [{
-    fallback: text,
-    pretext: 'We bring bots to life. :sunglasses: :thumbsup:',
-    title: 'Host, deploy and share your bot in seconds.',
-    image_url: 'https://storage.googleapis.com/beepboophq/_assets/bot-1.22f6fb.png',
-    title_link: 'https://beepboophq.com/',
-    text: text,
-    color: '#7CD197'
-  }]
-
-  bot.reply(message, {
-    attachments: attachments
-  }, function (err, resp) {
-    console.log(err, resp)
-  })
-})
-
-controller.hears('.*', ['direct_message', 'direct_mention'], function (bot, message) {
-  bot.reply(message, 'Sorry <@' + message.user + '>, I don\'t understand. \n')
-})
 
 controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
 
