@@ -1,6 +1,6 @@
 name: nodebot
 description: A simple node.js starter bot for Beep Boop
-avatar: resources/avatar.png
+avatar: images/gcp-avatar.png
 #background: resources/background.png
 config:
   - name: PROJECT_ID
