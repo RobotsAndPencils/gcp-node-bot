@@ -138,6 +138,72 @@ controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'],
     });
 })
 
+controller.hears(['gcpbot deploy list'], ['message_received','ambient'], function (bot, message) {
+
+    jwtClient.authorize(function(err, tokens) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      bot.reply(message, "Deployment list: ");
+
+      // Make an authorized request to list Drive files.
+      manager.deployments.list({
+        auth: jwtClient,
+        project: 'gcp-bot-test',
+        region: 'us-central1' },
+        function(err, resp) {
+          if( err) {
+            console.log(err);
+            return;
+          }
+
+          if( !resp.deployments ) {
+            bot.reply(message, "no deployments to report on");
+            return;
+          }
+
+          var deployTotalCount = resp.deployments.length;
+          var deployActiveCount = 0;
+
+          var activeDeploys = [];
+          var deadDeploys = [];
+
+
+          for ( i = 0; i < resp.deployments.length; i++ ) {
+              if( resp.deployments[i].operation.status != 'DONE' ) {
+                deployActiveCount++;
+                activeDeploys.push( resp.deployments[i] );
+              }
+              else {
+                deadDeploys.push( resp.deployments[i] );
+              }
+          }
+
+          bot.reply(message, "deployment total count: " + deployTotalCount);
+          bot.reply(message, "deployments active: " + deployActiveCount);
+
+          for ( i = 0; i < activeDeploys.length; i++ ) {
+            bot.reply(message, "Deploy " +
+              activeDeploys[i].name + " with id " + activeDeploys[i].id + " Active: started at " +
+              activeDeploys[i].operation.startTime + " by " +
+              activeDeploys[i].operation.user + " ---- deployment is " +
+              activeDeploys[i].operation.progress + " percent complete. To view progress, navigate to " +
+              " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID );
+          }
+
+          for ( i = 0; i < deadDeploys.length; i++ ) {
+            bot.reply(message, "Deploy " +
+              deadDeploys[i].name + " with id " + deadDeploys[i].id + " COMPLETE: started at " +
+              deadDeploys[i].operation.startTime + " by " +
+              deadDeploys[i].operation.user + " ---- deployment completed at " +
+              deadDeploys[i].operation.endTime );
+          }
+        });
+    });
+})
+
 // DEPLOYMENT of a file from github
 controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
 
@@ -251,7 +317,8 @@ function sleep(miliseconds) {
 
 controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, message) {
   var help = 'I will respond to the following messages: \n' +
-      '`gcpbot deploy summary` for a list of all deployment manager jobs and their status.\n' +
+      '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
+      '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
       '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
       '`gcpbot help` to see this again.'
