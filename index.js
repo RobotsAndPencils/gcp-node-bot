@@ -42,53 +42,10 @@ bot.startRTM(function (err, bot, payload) {
     throw new Error('Could not connect to Slack')
   }
 })
-/*
-var deployCheck = function( jwtClient, deployName, bot, message ) {
 
-  console.log("in deployCheck");
-
-  var filterStr = 'name eq ' + deployName;
-
-  bot.reply( message, "checking on " + deployName );
-
-  return manager.deployments.list({
-    auth: jwtClient,
-    project: 'gcp-bot-test',
-    region: 'us-central1',
-    filter: filterStr },
-    function(err, resp) {
-      if( err) {
-        console.log(err);
-        return;
-      }
-
-      if( !resp.deployments ) {
-        //bot.reply(message, "no deployment found");
-        return;
-      }
-
-      var currDeploy = resp.deployments[0];
-
-    messageRet = "Deploy " +
-      currDeploy.name + " is " + currDeploy.operation.status + " started at " +
-      currDeploy.operation.startTime + " by " +
-      currDeploy.operation.user + " ---- deployment completed at " +
-      currDeploy.operation.endTime );
-
-      if( currDeploy.operation.status != "DONE" ) {
-        messageRet += "\nCurrent progress: " + currDeploy.operation.progress;
-      }
-
-      return currDeploy.operation.progress;
-
-    });
-}
-*/
 controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!")
 })
-
-
 
 controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], function (bot, message) {
 
