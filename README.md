@@ -1,13 +1,11 @@
-# starter-node-bot
+# gcp-node-bot
 
 ## Overview
-A simple starting point for creating a Beep Boop hostable, Node.js based Slack bot with botkit
+The GCP Node Bot is a bot that is build to automate some of the deployment and monitoring capability in the Google Cloud Platform
+
+It has all the components to make it ready-made to run on Beep Boop.
 
 Visit [Beep Boop](https://beepboophq.com/docs/article/overview) to get the scoop on the the Beep Boop hosting platform. The Slack API documentation can be found [here](https://api.slack.com/).
-
-## Assumptions
-* You have already signed up with [Beep Boop](https://beepboophq.com) and have a local fork of this project.
-* You have sufficient rights in your Slack team to configure a bot and generate/access a Slack API token.
 
 ## Usage
 
@@ -27,6 +25,12 @@ Things are looking good if the console prints something like:
 
 ### Run in BeepBoop
 If you have linked your local repo with the Beep Boop service (check [here](https://beepboophq.com/0_o/my-projects)), changes pushed to the remote master branch will automatically deploy.
+
+### It's Running - Now What?
+
+`gcpbot help` will show a list of available commands
+
+The `deploy new` command relies on a publicly visible repo that has a valid yaml deployment file.  This is just a POC, and we'd probably want to use a remote template with command-line parameters supplied by the deployer. 
 
 ## Acknowledgements
 
