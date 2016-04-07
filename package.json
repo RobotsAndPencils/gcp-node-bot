@@ -26,6 +26,7 @@
     "gcloud": "^0.28.0",
     "googleapis": "google/google-api-nodejs-client",
     "jsonfile": "^2.2.3",
-    "request": "^2.69.0"
+    "request": "^2.69.0",
+    "yamljs": "^0.2.7"
   }
 }

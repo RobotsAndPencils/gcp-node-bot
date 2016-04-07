@@ -7,6 +7,7 @@ var google = require('googleapis');
 var manager = google.deploymentmanager('v2');
 var monitoring = google.cloudmonitoring('v2beta2');
 var compute = google.compute('v1');
+var yaml = require('yamljs');
 
 // Expect a SLACK_TOKEN environment variable
 var slackToken = process.env.SLACK_TOKEN
@@ -204,6 +205,18 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
     });
 })
 
+// ticketing NOT YET IMPLEMENTED IN NODE API
+
+// stackdriver monitoring not yet implemented in node api
+
+
+
+
+
+
+
+
+
 // DEPLOYMENT of a file from github
 controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
 
@@ -220,11 +233,9 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
   var resContent = "";
 
   request(fullPath, function (error, response, body) {
+
     if (!error && response.statusCode == 200) {
       resContent = body;
-
-      //now print content
-      console.log("content found: " + resContent);
 
       //now do the auth and call to manifest
       jwtClient.authorize(function(err, tokens) {
@@ -257,12 +268,15 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
             var complete = false;
 
             checkDeploy(bot, message, jwtClient, depName );
-          }
-        );
-      });
-    }
-  })
-})
+            });
+          });
+      }
+      else {
+        console.log(error);
+      }
+  });
+});
+
 
 function checkDeploy( bot, message, jwtClient, depName ) {
 
@@ -302,6 +316,38 @@ function checkDeploy( bot, message, jwtClient, depName ) {
         checkDeploy( bot, message, jwtClient, depName );
       }
       else {
+        //now get the resources based on the dep name
+        manager.resources.list({
+          auth: jwtClient,
+          project: 'gcp-bot-test',
+          deployment: depName
+         },
+          function( err, resp ) {
+
+            if( err ) {
+              console.log(err);
+              return;
+            }
+
+            //for each resource, check status of machine - if there's an error - check logs
+            resList = resp.resources;
+            bot.reply(message, "Deployment " + depName + " resource summary");
+
+            for ( var i = 0; i < resList.length; i++ ) {
+
+              var resName = resList[i].name;
+              var resType = resList[i].type;
+
+              //get the yaml for the properties, and pull out some interesting info
+              var propObj = yaml.parse(resList[i].finalProperties);
+
+              bot.reply(message, "Resource #" + i + ":");
+              bot.reply(message, "*Name:* " + resName +
+                "\n*Type:* " + resType +
+                "\n*Machine Class:* " + propObj.machineType +
+                "\n*Zone:* " + propObj.zone );
+            }
+          });
         return;
       }
     });
