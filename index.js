@@ -16,14 +16,10 @@ if (!slackToken) {
   process.exit(1)
 }
 
-// id: 1047464413093-1v98trn2qdggn3edu2n6cfo15t8589cn.apps.googleusercontent.com
-// secret: ahhGUn-FY75NCdmUdI2FZZJN
-var keyfile = 'gcp-bot-test-9c7dbb93f7ba.json';
+var projectId = process.env.PROJECT_ID;
 
-var gcloud = require('gcloud')({
-  projectId: process.env.PROJECT_ID,
-  keyFilename: keyfile
-});
+// TODO change this or just remove once auth is done
+var keyfile = 'gcp-bot-test-9c7dbb93f7ba.json';
 
 var key = require("./" + keyfile);
 var jwtClient = new google.auth.JWT(key.client_email, null, key.private_key,
@@ -85,8 +81,8 @@ controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'],
       // Make an authorized request to list Drive files.
       manager.deployments.list({
         auth: jwtClient,
-        project: 'gcp-bot-test',
-        region: 'us-central1',
+        project: projectId,
+        region: 'us-central1', //TODO Probably want to parameterize this
         filter: filterStr },
         function(err, resp) {
           if( err) {
@@ -152,8 +148,8 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
       // Make an authorized request to list Drive files.
       manager.deployments.list({
         auth: jwtClient,
-        project: 'gcp-bot-test',
-        region: 'us-central1' },
+        project: projectId,
+        region: 'us-central1' }, //TODO Probably want to parameterize this
         function(err, resp) {
           if( err) {
             console.log(err);
@@ -207,13 +203,8 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
 
 // ticketing NOT YET IMPLEMENTED IN NODE API
 
+
 // stackdriver monitoring not yet implemented in node api
-
-
-
-
-
-
 
 
 
@@ -248,7 +239,7 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
 
         manager.deployments.insert({
           auth: jwtClient,
-          project: 'gcp-bot-test',
+          project: projectId,
           resource: {
             name: depName,
             target: {
@@ -285,8 +276,8 @@ function checkDeploy( bot, message, jwtClient, depName ) {
 
   return manager.deployments.list({
     auth: jwtClient,
-    project: 'gcp-bot-test',
-    region: 'us-central1',
+    project: projectId,
+    region: 'us-central1', //TODO Probably want to parameterize this
     filter: filterStr },
     function(err, resp) {
       if( err) {
@@ -319,7 +310,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
         //now get the resources based on the dep name
         manager.resources.list({
           auth: jwtClient,
-          project: 'gcp-bot-test',
+          project: projectId,
           deployment: depName
          },
           function( err, resp ) {
@@ -372,6 +363,8 @@ controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, 
 })
 
 
+//this stuff doesn't really work - not sure how to get metrics back - i can see them
+// in the gcp console, but they won't show here
 controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
 
   jwtClient.authorize(function(err, tokens) {
@@ -382,7 +375,7 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
 
     monitoring.metricDescriptors.list({
       auth: jwtClient,
-      project: 'gcp-bot-test',
+      project: projectId,
       count: 100 },
       //metric: 'compute.googleapis.com/instance/uptime',
       //youngest: new Date().toJSON()},
@@ -392,8 +385,6 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
           console.log(err);
           return;
         }
-
-        //console.log( "resp: " + JSON.stringify(resp) );
 
         metrics = resp.metrics;
 
@@ -417,8 +408,8 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
 
     compute.instances.list({
       auth: jwtClient,
-      project: 'gcp-bot-test',
-      zone: 'us-central1-a'},
+      project: projectId,
+      zone: 'us-central1-a'}, //TODO Probably want to parameterize this
       function( err, resp ) {
 
         if( err ) {

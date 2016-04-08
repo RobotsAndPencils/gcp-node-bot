@@ -11,7 +11,7 @@ Visit [Beep Boop](https://beepboophq.com/docs/article/overview) to get the scoop
 
 ### Run locally
 	npm install
-	SLACK_TOKEN=<YOUR_SLACK_TOKEN> npm start
+	SLACK_TOKEN=<YOUR_SLACK_TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> npm start
 
 Things are looking good if the console prints something like:
 
@@ -21,7 +21,7 @@ Things are looking good if the console prints something like:
 
 ### Run locally in Docker
 	docker build -t starter-node .`
-	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> starter-node
+	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> starter-node
 
 ### Run in BeepBoop
 If you have linked your local repo with the Beep Boop service (check [here](https://beepboophq.com/0_o/my-projects)), changes pushed to the remote master branch will automatically deploy.
@@ -30,7 +30,7 @@ If you have linked your local repo with the Beep Boop service (check [here](http
 
 `gcpbot help` will show a list of available commands
 
-The `deploy new` command relies on a publicly visible repo that has a valid yaml deployment file.  This is just a POC, and we'd probably want to use a remote template with command-line parameters supplied by the deployer. 
+The `deploy new` command relies on a publicly visible repo that has a valid yaml deployment file.  This is just a POC, and we'd probably want to use a remote template with command-line parameters supplied by the deployer.
 
 ## Acknowledgements
 
