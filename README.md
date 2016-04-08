@@ -11,7 +11,7 @@ Visit [Beep Boop](https://beepboophq.com/docs/article/overview) to get the scoop
 
 ### Run locally
 	npm install
-	SLACK_TOKEN=<YOUR_SLACK_TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> npm start
+	SLACK_TOKEN=<YOUR_SLACK_TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> PROJECT_ZONE=<YOUR_PROJECT_ZONE> npm start
 
 Things are looking good if the console prints something like:
 
@@ -21,7 +21,7 @@ Things are looking good if the console prints something like:
 
 ### Run locally in Docker
 	docker build -t starter-node .`
-	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> starter-node
+	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> PROJECT_ZONE=<YOUR_PROJECT_ZONE> starter-node
 
 ### Run in BeepBoop
 If you have linked your local repo with the Beep Boop service (check [here](https://beepboophq.com/0_o/my-projects)), changes pushed to the remote master branch will automatically deploy.
