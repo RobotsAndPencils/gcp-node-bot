@@ -16,7 +16,21 @@ if (!slackToken) {
   process.exit(1)
 }
 
+// Expect a PROJECT_ID environment variable
 var projectId = process.env.PROJECT_ID;
+if (!projectId) {
+  console.error('PROJECT_ID is required!')
+  process.exit(1)
+}
+
+// Expect a PROJECT_REGION environment variable
+var region = process.env.PROJECT_REGION;
+if (!region) {
+  console.error('PROJECT_REGION is required!')
+  process.exit(1)
+}
+// TODO: this should probably be part of the monitor command
+var zone = "us-central1-a";
 
 // TODO change this or just remove once auth is done
 var keyfile = 'gcp-bot-test-9c7dbb93f7ba.json';
@@ -61,7 +75,6 @@ controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], 
 });
 
 controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'], function (bot, message) {
-  //bot.reply(message, 'Hello.  I will be helping you with that request for gcp projects')
 
     var user = message.match[1].trim();
 
@@ -82,7 +95,7 @@ controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'],
       manager.deployments.list({
         auth: jwtClient,
         project: projectId,
-        region: 'us-central1', //TODO Probably want to parameterize this
+        region: region,
         filter: filterStr },
         function(err, resp) {
           if( err) {
@@ -149,7 +162,7 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
       manager.deployments.list({
         auth: jwtClient,
         project: projectId,
-        region: 'us-central1' }, //TODO Probably want to parameterize this
+        region: region },
         function(err, resp) {
           if( err) {
             console.log(err);
@@ -249,7 +262,7 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
             }
           }
          },
-          function( err, resp ) {
+         function( err, resp ) {
 
             if( err ) {
               console.log(err);
@@ -259,11 +272,12 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
             var complete = false;
 
             checkDeploy(bot, message, jwtClient, depName );
-            });
           });
+        });
       }
       else {
-        console.log(error);
+        console.log(error, response.statusCode);
+        bot.reply(message, "yaml file not found: " + fullPath);
       }
   });
 });
@@ -277,7 +291,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
   return manager.deployments.list({
     auth: jwtClient,
     project: projectId,
-    region: 'us-central1', //TODO Probably want to parameterize this
+    region: region,
     filter: filterStr },
     function(err, resp) {
       if( err) {
@@ -295,16 +309,17 @@ function checkDeploy( bot, message, jwtClient, depName ) {
       bot.reply(message, "Deploy " +
         currDeploy.name + " status = " + currDeploy.operation.status + " : started at " +
         currDeploy.operation.startTime + " by " +
-        currDeploy.operation.user + " ---- deployment completed at " +
-        currDeploy.operation.endTime );
+        currDeploy.operation.user);
+      if (currDeploy.operation.endTime) {
+        bot.reply(message, "Deployment completed at " + currDeploy.operation.endTime);
+      }
 
       if( currDeploy.operation.status != "DONE" && currDeploy.operation.status != "COMPLETE" ) {
         bot.reply(message, "Current progress: " + currDeploy.operation.progress);
 
-        //sorry for the horrible hack here
-        sleep( 2000 );
-
-        checkDeploy( bot, message, jwtClient, depName );
+        setTimeout(function() {
+          checkDeploy( bot, message, jwtClient, depName );
+        }, 2000);
       }
       else {
         //now get the resources based on the dep name
@@ -325,13 +340,14 @@ function checkDeploy( bot, message, jwtClient, depName ) {
             bot.reply(message, "Deployment " + depName + " resource summary");
 
             for ( var i = 0; i < resList.length; i++ ) {
-
               var resName = resList[i].name;
               var resType = resList[i].type;
 
               //get the yaml for the properties, and pull out some interesting info
-              var propObj = yaml.parse(resList[i].finalProperties);
-
+              var propObj =  {}
+              if (resList[i].finalProperties) {
+                propObj = yaml.parse(resList[i].finalProperties);
+              }
               bot.reply(message, "Resource #" + i + ":");
               bot.reply(message, "*Name:* " + resName +
                 "\n*Type:* " + resType +
@@ -342,14 +358,6 @@ function checkDeploy( bot, message, jwtClient, depName ) {
         return;
       }
     });
-}
-
-//nothing to see here...
-function sleep(miliseconds) {
-   var currentTime = new Date().getTime();
-
-   while (currentTime + miliseconds >= new Date().getTime()) {
-   }
 }
 
 controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, message) {
@@ -409,7 +417,7 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
     compute.instances.list({
       auth: jwtClient,
       project: projectId,
-      zone: 'us-central1-a'}, //TODO Probably want to parameterize this
+      zone: zone },
       function( err, resp ) {
 
         if( err ) {
