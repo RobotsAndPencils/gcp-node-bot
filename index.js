@@ -370,11 +370,7 @@ controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, 
   bot.reply(message, help)
 })
 
-
-//this stuff doesn't really work - not sure how to get metrics back - i can see them
-// in the gcp console, but they won't show here
-controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
-
+controller.hears(['gcpbot metrics'], ['message_received','ambient'], function (bot, message) {
   jwtClient.authorize(function(err, tokens) {
     if (err) {
       console.log(err);
@@ -385,8 +381,6 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
       auth: jwtClient,
       project: projectId,
       count: 100 },
-      //metric: 'compute.googleapis.com/instance/uptime',
-      //youngest: new Date().toJSON()},
       function( err, resp ) {
 
         if( err ) {
@@ -399,35 +393,83 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
         console.log("metrics: " + metrics.length);
 
         for( i = 0; i < metrics.length; i++ ) {
-          //console.log(metrics[i].name + " desc: " + metrics[i].description );
+          console.log(metrics[i].name + " desc: " + metrics[i].description );
         }
 
       }
     );
-
-    //compute.googleapis.com/instance/cpu/utilization
   });
+});
+
+controller.hears(['gcpbot monitor (.*)', 'gcpbot m (.*)', 'gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
 
   jwtClient.authorize(function(err, tokens) {
-    if (err) {
+    if ( err ) {
       console.log(err);
       return;
     }
-
-    compute.instances.list({
-      auth: jwtClient,
-      project: projectId,
-      zone: zone },
+    var metric = parseMetricFromMessage(message);
+    
+    monitoring.timeseries.list({
+        auth: jwtClient,
+        project: projectId,
+        metric: encodeURIComponent(metric),
+        youngest: new Date().toJSON()
+      },
       function( err, resp ) {
-
-        if( err ) {
+        if (err) {
           console.log(err);
           return;
         }
-
-        console.log( "resp: " + JSON.stringify(resp) );
+        
+        var timeseries = resp.timeseries;
+        if (timeseries) {
+          for( i = 0; i < timeseries.length; i++ ) {
+            console.log("desc:", timeseries[i].timeseriesDesc);
+            console.log("# points:", timeseries[i].points.length);
+            
+            var desc = timeseries[i].timeseriesDesc;
+            var instance = desc.labels["compute.googleapis.com/instance_name"];
+              
+            var points = timeseries[i].points;
+            if (points && points.length > 0) {
+              var newestPoint = points[0];
+              var newestValue = getTimeseriesValue(newestPoint); // * 100;
+              var avg = 0;
+              for( j = 0; j < points.length; j++ ) {
+                  avg += getTimeseriesValue(points[j]);
+              }
+              avg = avg / points.length; // * 100
+              
+              bot.reply(message, '*' + instance + '*: ' + desc.metric + '\n' + newestValue.toFixed(3) + ' at ' + newestPoint.end + ' *|* ' + avg.toFixed(3) + ' average (' + points.length + ' samples)');
+              console.log(newestPoint);
+            }
+          }
+        } else {
+          bot.reply(message, 'No results for ' + metric);
+          console.log("timeseries response:", resp);
+        }
       }
     );
   });
-
 });
+
+function parseMetricFromMessage(message) {
+  var metric = message.match[1];
+  if (metric) {
+      metric = metric;
+      metric = /<.*\|(.*)>/.exec(metric)[1] || metric;
+  } else {
+      metric = 'compute.googleapis.com/instance/cpu/utilization';
+  }
+  return metric.trim();
+}
+
+function getTimeseriesValue(point) {
+  if (point.doubleValue) {
+    return parseFloat(point.doubleValue);
+  } else if (point.int64Value) {
+    return parseInt(point.int64Value);
+  }
+  return;
+}
