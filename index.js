@@ -216,11 +216,6 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
 
 // ticketing NOT YET IMPLEMENTED IN NODE API
 
-
-// stackdriver monitoring not yet implemented in node api
-
-
-
 // DEPLOYMENT of a file from github
 controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
 
@@ -366,6 +361,7 @@ controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, 
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
       '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
+      '`gcpbot monitor <metrics...>` to show the values for a set of metrics (space-separated list).\n' +
       '`gcpbot help` to see this again.'
   bot.reply(message, help)
 })
@@ -408,61 +404,110 @@ controller.hears(['gcpbot monitor (.*)', 'gcpbot m (.*)', 'gcpbot monitor', 'gcp
       console.log(err);
       return;
     }
-    var metric = parseMetricFromMessage(message);
+    var metrics = parseMetricsFromMessage(message); // Parse a space-separated list of metrics
+    var responseData = {};
+    var metricsComplete = 0;
     
-    monitoring.timeseries.list({
-        auth: jwtClient,
-        project: projectId,
-        metric: encodeURIComponent(metric),
-        youngest: new Date().toJSON()
-      },
-      function( err, resp ) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-        
-        var timeseries = resp.timeseries;
+    for (var i in metrics) {
+      var metric = metrics[i];
+      responseData[metric] = []
+      monitorSeries(metric, function(metric, timeseries) {
         if (timeseries) {
-          for( i = 0; i < timeseries.length; i++ ) {
-            console.log("desc:", timeseries[i].timeseriesDesc);
-            console.log("# points:", timeseries[i].points.length);
-            
-            var desc = timeseries[i].timeseriesDesc;
-            var instance = desc.labels["compute.googleapis.com/instance_name"];
-              
-            var points = timeseries[i].points;
-            if (points && points.length > 0) {
-              var newestPoint = points[0];
-              var newestValue = getTimeseriesValue(newestPoint); // * 100;
-              var avg = 0;
-              for( j = 0; j < points.length; j++ ) {
-                  avg += getTimeseriesValue(points[j]);
-              }
-              avg = avg / points.length; // * 100
-              
-              bot.reply(message, '*' + instance + '*: ' + desc.metric + '\n' + newestValue.toFixed(3) + ' at ' + newestPoint.end + ' *|* ' + avg.toFixed(3) + ' average (' + points.length + ' samples)');
-              console.log(newestPoint);
-            }
-          }
-        } else {
-          bot.reply(message, 'No results for ' + metric);
-          console.log("timeseries response:", resp);
+          responseData[metric] = timeseries;
         }
-      }
-    );
+        metricsComplete++;
+        if (metricsComplete == metrics.length) {
+          outputData(bot, message, metrics, responseData);
+        }
+      });
+    }
   });
 });
 
-function parseMetricFromMessage(message) {
-  var metric = message.match[1];
-  if (metric) {
-      metric = metric;
-      metric = /<.*\|(.*)>/.exec(metric)[1] || metric;
-  } else {
-      metric = 'compute.googleapis.com/instance/cpu/utilization';
+function outputData(bot, message, metrics, responseData) {
+  // Swap around the data to be per instance instead of per metric
+  var instanceData = {};
+  for (var metric in responseData) {
+    var timeseries = responseData[metric];
+    for (i = 0; i < timeseries.length; i++) {
+      var instance = timeseries[i].timeseriesDesc.labels["compute.googleapis.com/instance_name"];
+      if (!instanceData[instance]) {
+        instanceData[instance] = {}
+      }
+      instanceData[instance][metric] = timeseries[i];
+    }
   }
-  return metric.trim();
+  
+  // Now build one slack message per instance
+  for (var instance in instanceData) {
+    var instanceMessage = '*' + instance + '*\n';
+    
+    for (var i in metrics) {
+      var metric = metrics[i];
+      var timeseries = instanceData[instance][metric];
+      if (timeseries) {
+        var desc = timeseries.timeseriesDesc.labels["compute.googleapis.com/instance_name"]; 
+        var points = timeseries.points;
+        if (points && points.length > 0) {
+          var newestPoint = points[0];
+          var newestValue = getTimeseriesValue(newestPoint);
+          var avg = 0;
+          for( j = 0; j < points.length; j++ ) {
+              avg += getTimeseriesValue(points[j]);
+          }
+          avg = avg / points.length;
+          
+          instanceMessage += metric + ': ' + newestValue.toFixed(3) + ' at ' + newestPoint.end + ' *|* ' + avg.toFixed(3) + ' average\n';
+        }
+      } else {
+        instanceMessage += metric + ': No data\n';
+      }
+    }
+    bot.reply(message, instanceMessage);
+  }
+  
+  
+}
+
+function monitorSeries(metric, callback) {
+  monitoring.timeseries.list({
+      auth: jwtClient,
+      project: projectId,
+      metric: encodeURIComponent(metric),
+      youngest: new Date().toJSON()
+    },
+    function( err, resp ) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      
+      if (resp.timeseries) {
+        callback(metric, resp.timeseries);
+      } else {
+        callback(metric, null);
+        console.log("timeseries response:", resp);
+      }
+    }
+  );
+}
+
+function parseMetricsFromMessage(message) {
+  var metricString = message.match[1];
+  if (metricString) {
+      var metrics = metricString.split(' ');
+      // Pull metric out of the Slack link syntax (because it looks like a URL)
+      for (i = 0; i < metrics.length; i++) {
+        var metric = metrics[i]
+        var result = /<.*\|(.*)>/.exec(metric);
+        if (result) {
+          metrics[i] = result[1] || metric;
+        }
+      }
+      return metrics;
+  } else {
+      return ['compute.googleapis.com/instance/cpu/utilization'];
+  }
 }
 
 function getTimeseriesValue(point) {
