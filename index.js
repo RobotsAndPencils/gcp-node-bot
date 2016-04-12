@@ -462,7 +462,7 @@ function outputData(bot, message, metrics, responseData) {
           }
           avg = avg / points.length;
           
-          instanceMessage += metric + ': ' + newestValue.toFixed(3) + ' at ' + newestPoint.end + ' *|* ' + avg.toFixed(3) + ' average\n';
+          instanceMessage += metric + ': ' + round(newestValue, 3) + ' at ' + newestPoint.end + ' *|* ' +  round(avg, 3) + ' average\n';
         }
       } else {
         instanceMessage += metric + ': No data\n';
@@ -521,4 +521,8 @@ function getTimeseriesValue(point) {
     return parseInt(point.int64Value);
   }
   return;
+}
+
+function round(value, decimals) {
+    return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
 }
