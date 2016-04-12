@@ -361,21 +361,25 @@ controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, 
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
       '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
+      '`gcpbot monitor metrics <filter...>` to list all metrics. Add one or more strings to filter the results (space-separated list, results match ALL strings).\n' +
       '`gcpbot monitor <metrics...>` to show the values for a set of metrics (space-separated list).\n' +
       '`gcpbot help` to see this again.'
   bot.reply(message, help)
 })
 
-controller.hears(['gcpbot metrics'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot monitor metrics (.*)', 'gcpbot monitor metrics', 'gcpbot m metrics (.*)', 'gcpbot m metrics'], ['message_received','ambient'], function (bot, message) {
   jwtClient.authorize(function(err, tokens) {
     if (err) {
       console.log(err);
       return;
     }
-
+    
+    var parsedMetrics = parseMetricsFromMessage(message);
+    var query = parsedMetrics ? parsedMetrics.join(' ') : '';
     monitoring.metricDescriptors.list({
       auth: jwtClient,
       project: projectId,
+      query: query,
       count: 100 },
       function( err, resp ) {
 
@@ -385,12 +389,13 @@ controller.hears(['gcpbot metrics'], ['message_received','ambient'], function (b
         }
 
         metrics = resp.metrics;
+        console.log("metrics:", metrics.length, "query:", query);
 
-        console.log("metrics: " + metrics.length);
-
+        var responseMessage = metrics.length + " metrics:";
         for( i = 0; i < metrics.length; i++ ) {
-          console.log(metrics[i].name + " desc: " + metrics[i].description );
+          responseMessage += "\n `" + metrics[i].name + "` - " + metrics[i].description;
         }
+        bot.reply(message, responseMessage);
 
       }
     );
@@ -404,7 +409,7 @@ controller.hears(['gcpbot monitor (.*)', 'gcpbot m (.*)', 'gcpbot monitor', 'gcp
       console.log(err);
       return;
     }
-    var metrics = parseMetricsFromMessage(message); // Parse a space-separated list of metrics
+    var metrics = parseMetricsFromMessage(message) || ['compute.googleapis.com/instance/cpu/utilization']; // Parse a space-separated list of metrics
     var responseData = {};
     var metricsComplete = 0;
     
@@ -495,7 +500,7 @@ function monitorSeries(metric, callback) {
 function parseMetricsFromMessage(message) {
   var metricString = message.match[1];
   if (metricString) {
-      var metrics = metricString.split(' ');
+      var metrics = metricString.trim().split(' ');
       // Pull metric out of the Slack link syntax (because it looks like a URL)
       for (i = 0; i < metrics.length; i++) {
         var metric = metrics[i]
@@ -505,9 +510,8 @@ function parseMetricsFromMessage(message) {
         }
       }
       return metrics;
-  } else {
-      return ['compute.googleapis.com/instance/cpu/utilization'];
   }
+  return null;
 }
 
 function getTimeseriesValue(point) {
