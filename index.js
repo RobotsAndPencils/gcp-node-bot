@@ -88,63 +88,8 @@ controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'],
       }
 
       bot.reply(message, "Deployment summary for " + email);
-
       var filterStr = 'operation.user eq ' + email;
-
-      // Make an authorized request to list Drive files.
-      manager.deployments.list({
-        auth: jwtClient,
-        project: projectId,
-        region: region,
-        filter: filterStr },
-        function(err, resp) {
-          if( err) {
-            console.log(err);
-            return;
-          }
-
-          if( !resp.deployments ) {
-            bot.reply(message, "no deployments to report on");
-            return;
-          }
-
-          var deployTotalCount = resp.deployments.length;
-          var deployActiveCount = 0;
-
-          var activeDeploys = [];
-          var deadDeploys = [];
-
-
-          for ( i = 0; i < resp.deployments.length; i++ ) {
-              if( resp.deployments[i].operation.status != 'DONE' ) {
-                deployActiveCount++;
-                activeDeploys.push( resp.deployments[i] );
-              }
-              else {
-                deadDeploys.push( resp.deployments[i] );
-              }
-          }
-
-          bot.reply(message, "deployment total count: " + deployTotalCount);
-          bot.reply(message, "deployments active: " + deployActiveCount);
-
-          for ( i = 0; i < activeDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              activeDeploys[i].name + " with id " + activeDeploys[i].id + " Active: started at " +
-              activeDeploys[i].operation.startTime + " by " +
-              activeDeploys[i].operation.user + " ---- deployment is " +
-              activeDeploys[i].operation.progress + " percent complete. To view progress, navigate to " +
-              " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID );
-          }
-
-          for ( i = 0; i < deadDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              deadDeploys[i].name + " with id " + deadDeploys[i].id + " COMPLETE: started at " +
-              deadDeploys[i].operation.startTime + " by " +
-              deadDeploys[i].operation.user + " ---- deployment completed at " +
-              deadDeploys[i].operation.endTime );
-          }
-        });
+      listDeployments(bot, message, filterStr);
     });
 })
 
@@ -157,62 +102,9 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
       }
 
       bot.reply(message, "Deployment list: ");
-
-      // Make an authorized request to list Drive files.
-      manager.deployments.list({
-        auth: jwtClient,
-        project: projectId,
-        region: region },
-        function(err, resp) {
-          if( err) {
-            console.log(err);
-            return;
-          }
-
-          if( !resp.deployments ) {
-            bot.reply(message, "no deployments to report on");
-            return;
-          }
-
-          var deployTotalCount = resp.deployments.length;
-          var deployActiveCount = 0;
-
-          var activeDeploys = [];
-          var deadDeploys = [];
-
-
-          for ( i = 0; i < resp.deployments.length; i++ ) {
-              if( resp.deployments[i].operation.status != 'DONE' ) {
-                deployActiveCount++;
-                activeDeploys.push( resp.deployments[i] );
-              }
-              else {
-                deadDeploys.push( resp.deployments[i] );
-              }
-          }
-
-          bot.reply(message, "deployment total count: " + deployTotalCount);
-          bot.reply(message, "deployments active: " + deployActiveCount);
-
-          for ( i = 0; i < activeDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              activeDeploys[i].name + " with id " + activeDeploys[i].id + " Active: started at " +
-              activeDeploys[i].operation.startTime + " by " +
-              activeDeploys[i].operation.user + " ---- deployment is " +
-              activeDeploys[i].operation.progress + " percent complete. To view progress, navigate to " +
-              " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID );
-          }
-
-          for ( i = 0; i < deadDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              deadDeploys[i].name + " with id " + deadDeploys[i].id + " COMPLETE: started at " +
-              deadDeploys[i].operation.startTime + " by " +
-              deadDeploys[i].operation.user + " ---- deployment completed at " +
-              deadDeploys[i].operation.endTime );
-          }
-        });
+      listDeployments(bot, message);
     });
-})
+});
 
 // ticketing NOT YET IMPLEMENTED IN NODE API
 
@@ -277,6 +169,15 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
   });
 });
 
+function emojiForStatus(status) {
+  if (status == "PENDING") {
+    return "✋";
+  } else if (status == "RUNNING") {
+    return "🏃";
+  } else if (status == "DONE" || status == "COMPLETE") {
+    return "✅";
+  }
+}
 
 function checkDeploy( bot, message, jwtClient, depName ) {
 
@@ -295,23 +196,13 @@ function checkDeploy( bot, message, jwtClient, depName ) {
       }
 
       if( !resp.deployments ) {
-        bot.reply(message, "no deployment found");
+        bot.reply(message, "No deployment found");
         return;
       }
-
       var currDeploy = resp.deployments[0];
-
-      bot.reply(message, "Deploy " +
-        currDeploy.name + " status = " + currDeploy.operation.status + " : started at " +
-        currDeploy.operation.startTime + " by " +
-        currDeploy.operation.user);
-      if (currDeploy.operation.endTime) {
-        bot.reply(message, "Deployment completed at " + currDeploy.operation.endTime);
-      }
+      sendDeployDetailReplies(bot, message, resp.deployments[0]);
 
       if( currDeploy.operation.status != "DONE" && currDeploy.operation.status != "COMPLETE" ) {
-        bot.reply(message, "Current progress: " + currDeploy.operation.progress);
-
         setTimeout(function() {
           checkDeploy( bot, message, jwtClient, depName );
         }, 2000);
@@ -332,7 +223,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
 
             //for each resource, check status of machine - if there's an error - check logs
             resList = resp.resources;
-            bot.reply(message, "Deployment " + depName + " resource summary");
+            bot.reply(message, "Deploy *" + depName + "* resource summary:");
 
             for ( var i = 0; i < resList.length; i++ ) {
               var resName = resList[i].name;
@@ -343,7 +234,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
               if (resList[i].finalProperties) {
                 propObj = yaml.parse(resList[i].finalProperties);
               }
-              bot.reply(message, "Resource #" + i + ":");
+              bot.reply(message, "📋 Resource #" + i + ":");
               bot.reply(message, "*Name:* " + resName +
                 "\n*Type:* " + resType +
                 "\n*Machine Class:* " + propObj.machineType +
@@ -470,8 +361,6 @@ function outputData(bot, message, metrics, responseData) {
     }
     bot.reply(message, instanceMessage);
   }
-  
-  
 }
 
 function monitorSeries(metric, callback) {
@@ -525,4 +414,78 @@ function getTimeseriesValue(point) {
 
 function round(value, decimals) {
     return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
+}
+
+function sendDeployDetailReplies(bot, message, deploy, includeProgressLink) {
+  var statusIcon = emojiForStatus(deploy.operation.status);
+  var replyMessage = statusIcon + " Deploy *" +
+    deploy.name + "* Status: " + deploy.operation.status +
+    "\n*Started at*: " + deploy.operation.startTime;
+  if (deploy.operation.endTime) {
+    replyMessage += " *Completed at*: " + deploy.operation.endTime;
+  }
+  replyMessage += " by " + deploy.operation.user;
+  if (includeProgressLink) {
+    replyMessage += "\n" + deploy.operation.progress + "% complete. To view progress, navigate to " +
+      " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID
+  }
+  bot.reply(message, replyMessage);
+  
+  // print out the errors if the deployed is complete and had errors
+  if( deploy.operation.status == "DONE" || deploy.operation.status == "COMPLETE" ) {
+    if ( deploy.operation.error ) {
+      var errors = deploy.operation.error.errors;
+      for ( errorNum in errors ) {
+        var error = errors[errorNum];
+        console.log("error:", error);
+        bot.reply(message, "🚫 *Error*: " + error.code + " *location*: " + error.location + " *message*: " + error.message);
+      }
+    }
+  }
+}
+
+function listDeployments(bot, message, filterStr) {
+  var params = {
+    auth: jwtClient,
+    project: projectId,
+    region: region };
+  if (filterStr) {
+    params.filter = filterStr;
+  }
+  manager.deployments.list(params, function(err, resp) {
+      if( err) {
+        console.log(err);
+        bot.reply(message, "🚫 There was an error listing deployments.");
+        return;
+      }
+
+      if( !resp.deployments ) {
+        bot.reply(message, "No deployments to report on");
+        return;
+      }
+
+      var deployTotalCount = resp.deployments.length;
+
+      var activeDeploys = [];
+      var deadDeploys = [];
+
+      for ( i = 0; i < resp.deployments.length; i++ ) {
+          if( resp.deployments[i].operation.status != 'DONE' ) {
+            activeDeploys.push( resp.deployments[i] );
+          }
+          else {
+            deadDeploys.push( resp.deployments[i] );
+          }
+      }
+
+      bot.reply(message, "Deployments *Total Count*: " + deployTotalCount + " *Active*: " + activeDeploys.length);
+
+      for ( i = 0; i < activeDeploys.length; i++ ) {
+        sendDeployDetailReplies(bot, message, activeDeploys[i], true);
+      }
+
+      for ( i = 0; i < deadDeploys.length; i++ ) {
+        sendDeployDetailReplies(bot, message, deadDeploys[i], false);
+      }
+    });
 }
