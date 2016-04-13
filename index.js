@@ -8,6 +8,7 @@ var manager = google.deploymentmanager('v2');
 var monitoring = google.cloudmonitoring('v2beta2');
 var compute = google.compute('v1');
 var yaml = require('yamljs');
+var metricPackages = require('./metricPackages');
 
 // Expect a SLACK_TOKEN environment variable
 var slackToken = process.env.SLACK_TOKEN
@@ -29,11 +30,9 @@ if (!region) {
   console.error('PROJECT_REGION is required!')
   process.exit(1)
 }
-// TODO: this should probably be part of the monitor command
-var zone = "us-central1-a";
 
 // TODO change this or just remove once auth is done
-var keyfile = 'gcp-bot-test-9c7dbb93f7ba.json';
+var keyfile = 'gcp-test-c4e5388e828e.json';
 
 var key = require("./" + keyfile);
 var jwtClient = new google.auth.JWT(key.client_email, null, key.private_key,
@@ -58,9 +57,9 @@ controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!")
 })
 
-controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
 
-  var depId = message.match[1].trim();
+  var depId = message.match[2].trim();
 
   jwtClient.authorize(function(err, tokens) {
     if (err) {
@@ -74,9 +73,9 @@ controller.hears(['gcpbot deploy detail (.*)'], ['message_received','ambient'], 
   });
 });
 
-controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient'], function (bot, message) {
 
-    var user = message.match[1].trim();
+    var user = message.match[2].trim();
 
     var email = user.substring( user.indexOf(':') + 1, user.indexOf('|'));
     console.log(email);
@@ -109,14 +108,14 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
 // ticketing NOT YET IMPLEMENTED IN NODE API
 
 // DEPLOYMENT of a file from github
-controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
 
   var ghPref = 'https://github.com/';
   var rawMaster = '/raw/master/';
 
   //parse the stuff from inbound
-  var repo = message.match[1].trim();
-  var yaml = message.match[2].trim();
+  var repo = message.match[2].trim();
+  var yaml = message.match[3].trim();
 
   var fullPath = ghPref + repo + rawMaster + yaml + ".yaml";
 
@@ -246,7 +245,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
     });
 }
 
-controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, message) {
+controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
   var help = 'I will respond to the following messages: \n' +
       '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
@@ -258,14 +257,15 @@ controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, 
   bot.reply(message, help)
 })
 
-controller.hears(['gcpbot monitor metrics (.*)', 'gcpbot monitor metrics', 'gcpbot m metrics (.*)', 'gcpbot m metrics'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','ambient'], function (bot, message) {
   jwtClient.authorize(function(err, tokens) {
     if (err) {
       console.log(err);
       return;
     }
     
-    var parsedMetrics = parseMetricsFromMessage(message);
+    var metricString = message.match[3]
+    var parsedMetrics = parseMetricsFromMessage(metricString);
     var query = parsedMetrics ? parsedMetrics.join(' ') : '';
     monitoring.metricDescriptors.list({
       auth: jwtClient,
@@ -293,34 +293,67 @@ controller.hears(['gcpbot monitor metrics (.*)', 'gcpbot monitor metrics', 'gcpb
   });
 });
 
-controller.hears(['gcpbot monitor (.*)', 'gcpbot m (.*)', 'gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambient'], function (bot, message) {
 
   jwtClient.authorize(function(err, tokens) {
     if ( err ) {
       console.log(err);
       return;
     }
-    var metrics = parseMetricsFromMessage(message) || ['compute.googleapis.com/instance/cpu/utilization']; // Parse a space-separated list of metrics
-    var responseData = {};
-    var metricsComplete = 0;
     
-    for (var i in metrics) {
-      var metric = metrics[i];
-      responseData[metric] = []
-      monitorSeries(metric, function(metric, timeseries) {
-        if (timeseries) {
-          responseData[metric] = timeseries;
-        }
-        metricsComplete++;
-        if (metricsComplete == metrics.length) {
-          outputData(bot, message, metrics, responseData);
-        }
-      });
+    var metricString = (message.match[3] || '').trim();
+    // First see if there's a named package
+    if (metricPackages[metricString]) {
+      var metrics = metricPackages[metricString].metrics;
+      monitorMetrics(bot, message, metrics);
+    } else {
+      var packages = Object.keys(metricPackages).join('`, `');
+      bot.reply(message, 'Metric pack name is required. Try one of: `' + packages + '`');
     }
   });
 });
 
-function outputData(bot, message, metrics, responseData) {
+controller.hears(['gcpbot m(onitor)?(.*)?'], ['message_received','ambient'], function (bot, message) {
+
+  jwtClient.authorize(function(err, tokens) {
+    if ( err ) {
+      console.log(err);
+      return;
+    }
+    
+    var metricString = message.match[2];
+    var metrics = parseMetricsFromMessage(metricString);
+    if ( metrics ) {
+      monitorMetrics(bot, message, metrics);
+    } else {
+      bot.reply(message, "Metrics are required.");
+    }
+  });
+});
+
+function monitorMetrics(bot, message, metrics) {
+  var responseData = {};
+  var metricsComplete = 0;
+  
+  for (var i in metrics) {
+    var metric = metrics[i];
+    responseData[metric] = []
+    monitorSeries(metric, function(metric, timeseries, error) {
+      if (error) {
+        bot.reply(message, error.message);
+      }
+      if (timeseries) {
+        responseData[metric] = timeseries;
+      }
+      metricsComplete++;
+      if (metricsComplete == metrics.length) {
+        outputMetricsData(bot, message, metrics, responseData);
+      }
+    });
+  }
+}
+
+function outputMetricsData(bot, message, metrics, responseData) {
   // Swap around the data to be per instance instead of per metric
   var instanceData = {};
   for (var metric in responseData) {
@@ -373,21 +406,21 @@ function monitorSeries(metric, callback) {
     function( err, resp ) {
       if (err) {
         console.log(err);
+        callback(metric, null, err);
         return;
       }
       
       if (resp.timeseries) {
         callback(metric, resp.timeseries);
       } else {
-        callback(metric, null);
+        callback(metric);
         console.log("timeseries response:", resp);
       }
     }
   );
 }
 
-function parseMetricsFromMessage(message) {
-  var metricString = message.match[1];
+function parseMetricsFromMessage(metricString) {
   if (metricString) {
       var metrics = metricString.trim().split(' ');
       // Pull metric out of the Slack link syntax (because it looks like a URL)
