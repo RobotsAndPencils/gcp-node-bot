@@ -114,25 +114,33 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
 
   //parse the stuff from inbound
   var repo = message.match[2].trim();
-  var yamlName = message.match[3].trim();
+  var depFile = message.match[3].trim()
+  var yamlName = depFile + ".yaml";
   
   var ghPref = 'https://github.com/';
   var rawMaster = '/raw/master/';
-  var fullPath = ghPref + repo + rawMaster + yamlName + ".yaml";
+  var baseURL = ghPref + repo + rawMaster;
 
-  fetchConfiguration(fullPath, function(configString, imports) {
+  fetchConfiguration(baseURL, yamlName, function(configString, imports, errors) {
+    if (!configString) {
+      bot.reply(message, "yaml file not found: " + url.resolve(baseURL, yamlName));
+      return;
+    }
+    
+    if (errors) {
+      for(i = 0; i < errors.length; i++) {
+        bot.reply(message, '🚫 ' + errors[i]);
+      }
+    }
+    
     //now do the auth and call to manifest
     jwtClient.authorize(function(err, tokens) {
       if (err) {
         console.log(err);
         return;
       }
-      if (!configString) {
-        bot.reply(message, "yaml file not found: " + fullPath);
-        return;
-      }
 
-      var depName = yamlName + Math.floor(new Date() / 1000);
+      var depName = depFile + Math.floor(new Date() / 1000);
       // Now insert the dependency
       manager.deployments.insert({
           auth: jwtClient,
@@ -517,45 +525,49 @@ function listDeployments(bot, message, filterStr) {
     });
 }
 
-function fetchConfiguration(yamlURL, callback) {
+function fetchConfiguration(baseURL, yamlName, callback) {
   //get the file, use it as the resource info supplied to the insert cmd in gcp
   var configString = "";
-  var imports = [];
+  var files = [{ path: yamlName }];
   
-  console.log('fetching ', yamlURL);
-  request(yamlURL, function (error, response, yamlBody) {
+  fetchNextFile(files, baseURL, true, function(body, imports, errors) {
+    callback(body, imports, errors);
+  });
+}
+
+function fetchNextFile(files, baseURL, isConfig, callback) {
+  var file = files.shift();
+  // The recursion terminating case
+  if (!file) {
+    callback(null, [], []);
+    return;
+  }
+  
+  var fileImports = [];
+  var errors = [];
+  var fileURL = url.resolve(baseURL, file.path);
+  console.log('fetching ', fileURL);
+
+  request(fileURL, function (error, response, body) {
     if (!error && response.statusCode == 200) {
-      var yamlContent = yaml.parse(yamlBody);
-      // If there are no imports, end here
-      if (!yamlContent.imports) {
-        callback(yamlBody, imports);
-      }
-      
-      // Request each of the imports and then call the callback when they're all done
-      var completed = 0;
-      for(i = 0; i < yamlContent.imports.length; i++) {
-        var imp = yamlContent.imports[i];
-        // Resolve the relative path given in the import and the yaml url
-        var urlComponents = url.parse(yamlURL);
-        urlComponents.pathname = path.join(urlComponents.pathname, '..', imp.path);
-        var impURL = url.format(urlComponents);
-        console.log('fetching ', impURL);
-        // Now fetch this import file
-        request(impURL, function (error, response, body) {
-          if (!error && response.statusCode == 200) {
-            imports.push({
-              name: imp.path,
-              content: body
-            });
-          }
-          completed++;
-          if (completed == yamlContent.imports.length) {
-            callback(yamlBody, imports);
-          }
+      var yamlContent = yaml.parse(body);
+      files = files.concat(yamlContent.imports);
+      if (!isConfig) {
+        fileImports.push({
+          name: file.path,
+          content: body
         });
       }
     } else {
-      callback(null, null);
+      console.log("error", error, response ? response.statusCode : 'no response');
+      var errorMsg = error || (response.statusCode + ' response status');
+      errors.push(errorMsg + ' for ' + fileURL );
     }
+    
+    // Trigger the call for the next file (also handles empty case..)
+    // Build up the imports and errors list by combining in the callback.
+    fetchNextFile(files, baseURL, false, function (nextBody, nextImports, nextErrors) {
+      callback(body, fileImports.concat(nextImports), errors.concat(nextErrors));
+    });
   });
 }
