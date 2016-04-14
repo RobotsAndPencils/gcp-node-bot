@@ -8,6 +8,8 @@ var manager = google.deploymentmanager('v2');
 var monitoring = google.cloudmonitoring('v2beta2');
 var compute = google.compute('v1');
 var yaml = require('yamljs');
+var path = require('path');
+var url = require('url');
 var metricPackages = require('./metricPackages');
 
 // Expect a SLACK_TOKEN environment variable
@@ -110,62 +112,50 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
 // DEPLOYMENT of a file from github
 controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
 
-  var ghPref = 'https://github.com/';
-  var rawMaster = '/raw/master/';
-
   //parse the stuff from inbound
   var repo = message.match[2].trim();
-  var yaml = message.match[3].trim();
+  var yamlName = message.match[3].trim();
+  
+  var ghPref = 'https://github.com/';
+  var rawMaster = '/raw/master/';
+  var fullPath = ghPref + repo + rawMaster + yamlName + ".yaml";
 
-  var fullPath = ghPref + repo + rawMaster + yaml + ".yaml";
+  fetchConfiguration(fullPath, function(configString, imports) {
+    //now do the auth and call to manifest
+    jwtClient.authorize(function(err, tokens) {
+      if (err) {
+        console.log(err);
+        return;
+      }
+      if (!configString) {
+        bot.reply(message, "yaml file not found: " + fullPath);
+        return;
+      }
 
-  //get the file, use it as the resource info supplied to the insert cmd in gcp
-  var resContent = "";
-
-  request(fullPath, function (error, response, body) {
-
-    if (!error && response.statusCode == 200) {
-      resContent = body;
-
-      //now do the auth and call to manifest
-      jwtClient.authorize(function(err, tokens) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        var depName = yaml + Math.floor(new Date() / 1000);
-
-        manager.deployments.insert({
+      var depName = yamlName + Math.floor(new Date() / 1000);
+      // Now insert the dependency
+      manager.deployments.insert({
           auth: jwtClient,
           project: projectId,
           resource: {
             name: depName,
             target: {
               config: {
-                content: resContent
-              }
+                content: configString
+              },
+              imports: imports
             }
           }
-         },
-         function( err, resp ) {
-
-            if( err ) {
-              console.log(err);
-              return;
-            }
-
-            var complete = false;
-
-            checkDeploy(bot, message, jwtClient, depName );
-          });
+        },
+        function( err, resp ) {
+          if( err ) {
+            console.log(err);
+            return;
+          }
+          checkDeploy(bot, message, jwtClient, depName);
         });
-      }
-      else {
-        console.log(error, response.statusCode);
-        bot.reply(message, "yaml file not found: " + fullPath);
-      }
-  });
+      });
+    });
 });
 
 function emojiForStatus(status) {
@@ -217,6 +207,10 @@ function checkDeploy( bot, message, jwtClient, depName ) {
 
             if( err ) {
               console.log(err);
+              return;
+            }
+            if( !resp.resources ) {
+              bot.reply(message, "No resourses.");
               return;
             }
 
@@ -521,4 +515,47 @@ function listDeployments(bot, message, filterStr) {
         sendDeployDetailReplies(bot, message, deadDeploys[i], false);
       }
     });
+}
+
+function fetchConfiguration(yamlURL, callback) {
+  //get the file, use it as the resource info supplied to the insert cmd in gcp
+  var configString = "";
+  var imports = [];
+  
+  console.log('fetching ', yamlURL);
+  request(yamlURL, function (error, response, yamlBody) {
+    if (!error && response.statusCode == 200) {
+      var yamlContent = yaml.parse(yamlBody);
+      // If there are no imports, end here
+      if (!yamlContent.imports) {
+        callback(yamlBody, imports);
+      }
+      
+      // Request each of the imports and then call the callback when they're all done
+      var completed = 0;
+      for(i = 0; i < yamlContent.imports.length; i++) {
+        var imp = yamlContent.imports[i];
+        // Resolve the relative path given in the import and the yaml url
+        var urlComponents = url.parse(yamlURL);
+        urlComponents.pathname = path.join(urlComponents.pathname, '..', imp.path);
+        var impURL = url.format(urlComponents);
+        console.log('fetching ', impURL);
+        // Now fetch this import file
+        request(impURL, function (error, response, body) {
+          if (!error && response.statusCode == 200) {
+            imports.push({
+              name: imp.path,
+              content: body
+            });
+          }
+          completed++;
+          if (completed == yamlContent.imports.length) {
+            callback(yamlBody, imports);
+          }
+        });
+      }
+    } else {
+      callback(null, null);
+    }
+  });
 }
