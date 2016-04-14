@@ -1,5 +1,5 @@
-var Botkit = require('botkit')
-var jsonfile = require('jsonfile')
+var Botkit = require('botkit');
+var jsonfile = require('jsonfile');
 var querystring = require('querystring');
 var http = require('http');
 var request = require('request');
@@ -13,24 +13,24 @@ var url = require('url');
 var metricPackages = require('./metricPackages');
 
 // Expect a SLACK_TOKEN environment variable
-var slackToken = process.env.SLACK_TOKEN
+var slackToken = process.env.SLACK_TOKEN;
 if (!slackToken) {
-  console.error('SLACK_TOKEN is required!')
-  process.exit(1)
+  console.error('SLACK_TOKEN is required!');
+  process.exit(1);
 }
 
 // Expect a PROJECT_ID environment variable
 var projectId = process.env.PROJECT_ID;
 if (!projectId) {
-  console.error('PROJECT_ID is required!')
-  process.exit(1)
+  console.error('PROJECT_ID is required!');
+  process.exit(1);
 }
 
 // Expect a PROJECT_REGION environment variable
 var region = process.env.PROJECT_REGION;
 if (!region) {
-  console.error('PROJECT_REGION is required!')
-  process.exit(1)
+  console.error('PROJECT_REGION is required!');
+  process.exit(1);
 }
 
 // TODO change this or just remove once auth is done
@@ -44,20 +44,20 @@ var jwtClient = new google.auth.JWT(key.client_email, null, key.private_key,
     'https://www.googleapis.com/auth/monitoring',
   ], null);
 
-var controller = Botkit.slackbot()
+var controller = Botkit.slackbot();
 var bot = controller.spawn({
   token: slackToken
-})
+});
 
 bot.startRTM(function (err, bot, payload) {
   if (err) {
-    throw new Error('Could not connect to Slack')
+    throw new Error('Could not connect to Slack');
   }
-})
+});
 
 controller.on('bot_channel_join', function (bot, message) {
-  bot.reply(message, "I'm here!")
-})
+  bot.reply(message, "I'm here!");
+});
 
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
 
@@ -92,7 +92,7 @@ controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient
       var filterStr = 'operation.user eq ' + email;
       listDeployments(bot, message, filterStr);
     });
-})
+});
 
 controller.hears(['gcpbot deploy list'], ['message_received','ambient'], function (bot, message) {
 
@@ -114,7 +114,7 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
 
   //parse the stuff from inbound
   var repo = message.match[2].trim();
-  var depFile = message.match[3].trim()
+  var depFile = message.match[3].trim();
   var yamlName = depFile + ".yaml";
   
   var ghPref = 'https://github.com/';
@@ -231,7 +231,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
               var resType = resList[i].type;
 
               //get the yaml for the properties, and pull out some interesting info
-              var propObj =  {}
+              var propObj = {};
               if (resList[i].finalProperties) {
                 propObj = yaml.parse(resList[i].finalProperties);
               }
@@ -255,9 +255,9 @@ controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bo
       '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
       '`gcpbot monitor metrics <filter...>` to list all metrics. Add one or more strings to filter the results (space-separated list, results match ALL strings).\n' +
       '`gcpbot monitor <metrics...>` to show the values for a set of metrics (space-separated list).\n' +
-      '`gcpbot help` to see this again.'
-  bot.reply(message, help)
-})
+      '`gcpbot help` to see this again.';
+  bot.reply(message, help);
+});
 
 controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','ambient'], function (bot, message) {
   jwtClient.authorize(function(err, tokens) {
@@ -266,7 +266,7 @@ controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','amb
       return;
     }
     
-    var metricString = message.match[3]
+    var metricString = message.match[3];
     var parsedMetrics = parseMetricsFromMessage(metricString);
     var query = parsedMetrics ? parsedMetrics.join(' ') : '';
     monitoring.metricDescriptors.list({
@@ -337,37 +337,44 @@ function monitorMetrics(bot, message, metrics) {
   var responseData = {};
   var metricsComplete = 0;
   
+  var monitorCallback = function(metric, timeseries, error) {
+    if (error) {
+      bot.reply(message, error.message);
+    }
+    if (timeseries) {
+      responseData[metric] = timeseries;
+    }
+    metricsComplete++;
+    if (metricsComplete == metrics.length) {
+      outputMetricsData(bot, message, metrics, responseData);
+    }
+  };
+  
   for (var i in metrics) {
     var metric = metrics[i];
-    responseData[metric] = []
-    monitorSeries(metric, function(metric, timeseries, error) {
-      if (error) {
-        bot.reply(message, error.message);
-      }
-      if (timeseries) {
-        responseData[metric] = timeseries;
-      }
-      metricsComplete++;
-      if (metricsComplete == metrics.length) {
-        outputMetricsData(bot, message, metrics, responseData);
-      }
-    });
+    responseData[metric] = [];
+    monitorSeries(metric, monitorCallback);
   }
 }
 
-function outputMetricsData(bot, message, metrics, responseData) {
-  // Swap around the data to be per instance instead of per metric
+function invertMetricsData(responseData) {
   var instanceData = {};
   for (var metric in responseData) {
     var timeseries = responseData[metric];
-    for (i = 0; i < timeseries.length; i++) {
+    for (var i = 0; i < timeseries.length; i++) {
       var instance = timeseries[i].timeseriesDesc.labels["compute.googleapis.com/instance_name"];
       if (!instanceData[instance]) {
-        instanceData[instance] = {}
+        instanceData[instance] = {};
       }
       instanceData[instance][metric] = timeseries[i];
     }
   }
+  return instanceData;
+}
+
+function outputMetricsData(bot, message, metrics, responseData) {
+  // Swap around the data to be per instance instead of per metric
+  var instanceData = invertMetricsData(responseData);
   
   // Now build one slack message per instance
   for (var instance in instanceData) {
@@ -427,7 +434,7 @@ function parseMetricsFromMessage(metricString) {
       var metrics = metricString.trim().split(' ');
       // Pull metric out of the Slack link syntax (because it looks like a URL)
       for (i = 0; i < metrics.length; i++) {
-        var metric = metrics[i]
+        var metric = metrics[i];
         var result = /<.*\|(.*)>/.exec(metric);
         if (result) {
           metrics[i] = result[1] || metric;
@@ -462,7 +469,7 @@ function sendDeployDetailReplies(bot, message, deploy, includeProgressLink) {
   replyMessage += " by " + deploy.operation.user;
   if (includeProgressLink) {
     replyMessage += "\n" + deploy.operation.progress + "% complete. To view progress, navigate to " +
-      " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID
+      " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID;
   }
   bot.reply(message, replyMessage);
   
@@ -470,7 +477,7 @@ function sendDeployDetailReplies(bot, message, deploy, includeProgressLink) {
   if( deploy.operation.status == "DONE" || deploy.operation.status == "COMPLETE" ) {
     if ( deploy.operation.error ) {
       var errors = deploy.operation.error.errors;
-      for ( errorNum in errors ) {
+      for ( var errorNum in errors ) {
         var error = errors[errorNum];
         console.log("error:", error);
         bot.reply(message, "🚫 *Error*: " + error.code + " *location*: " + error.location + " *message*: " + error.message);
