@@ -88,63 +88,8 @@ controller.hears(['gcpbot deploy summary (.*)'], ['message_received','ambient'],
       }
 
       bot.reply(message, "Deployment summary for " + email);
-
       var filterStr = 'operation.user eq ' + email;
-
-      // Make an authorized request to list Drive files.
-      manager.deployments.list({
-        auth: jwtClient,
-        project: projectId,
-        region: region,
-        filter: filterStr },
-        function(err, resp) {
-          if( err) {
-            console.log(err);
-            return;
-          }
-
-          if( !resp.deployments ) {
-            bot.reply(message, "no deployments to report on");
-            return;
-          }
-
-          var deployTotalCount = resp.deployments.length;
-          var deployActiveCount = 0;
-
-          var activeDeploys = [];
-          var deadDeploys = [];
-
-
-          for ( i = 0; i < resp.deployments.length; i++ ) {
-              if( resp.deployments[i].operation.status != 'DONE' ) {
-                deployActiveCount++;
-                activeDeploys.push( resp.deployments[i] );
-              }
-              else {
-                deadDeploys.push( resp.deployments[i] );
-              }
-          }
-
-          bot.reply(message, "deployment total count: " + deployTotalCount);
-          bot.reply(message, "deployments active: " + deployActiveCount);
-
-          for ( i = 0; i < activeDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              activeDeploys[i].name + " with id " + activeDeploys[i].id + " Active: started at " +
-              activeDeploys[i].operation.startTime + " by " +
-              activeDeploys[i].operation.user + " ---- deployment is " +
-              activeDeploys[i].operation.progress + " percent complete. To view progress, navigate to " +
-              " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID );
-          }
-
-          for ( i = 0; i < deadDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              deadDeploys[i].name + " with id " + deadDeploys[i].id + " COMPLETE: started at " +
-              deadDeploys[i].operation.startTime + " by " +
-              deadDeploys[i].operation.user + " ---- deployment completed at " +
-              deadDeploys[i].operation.endTime );
-          }
-        });
+      listDeployments(bot, message, filterStr);
     });
 })
 
@@ -157,69 +102,11 @@ controller.hears(['gcpbot deploy list'], ['message_received','ambient'], functio
       }
 
       bot.reply(message, "Deployment list: ");
-
-      // Make an authorized request to list Drive files.
-      manager.deployments.list({
-        auth: jwtClient,
-        project: projectId,
-        region: region },
-        function(err, resp) {
-          if( err) {
-            console.log(err);
-            return;
-          }
-
-          if( !resp.deployments ) {
-            bot.reply(message, "no deployments to report on");
-            return;
-          }
-
-          var deployTotalCount = resp.deployments.length;
-          var deployActiveCount = 0;
-
-          var activeDeploys = [];
-          var deadDeploys = [];
-
-
-          for ( i = 0; i < resp.deployments.length; i++ ) {
-              if( resp.deployments[i].operation.status != 'DONE' ) {
-                deployActiveCount++;
-                activeDeploys.push( resp.deployments[i] );
-              }
-              else {
-                deadDeploys.push( resp.deployments[i] );
-              }
-          }
-
-          bot.reply(message, "deployment total count: " + deployTotalCount);
-          bot.reply(message, "deployments active: " + deployActiveCount);
-
-          for ( i = 0; i < activeDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              activeDeploys[i].name + " with id " + activeDeploys[i].id + " Active: started at " +
-              activeDeploys[i].operation.startTime + " by " +
-              activeDeploys[i].operation.user + " ---- deployment is " +
-              activeDeploys[i].operation.progress + " percent complete. To view progress, navigate to " +
-              " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID );
-          }
-
-          for ( i = 0; i < deadDeploys.length; i++ ) {
-            bot.reply(message, "Deploy " +
-              deadDeploys[i].name + " with id " + deadDeploys[i].id + " COMPLETE: started at " +
-              deadDeploys[i].operation.startTime + " by " +
-              deadDeploys[i].operation.user + " ---- deployment completed at " +
-              deadDeploys[i].operation.endTime );
-          }
-        });
+      listDeployments(bot, message);
     });
-})
+});
 
 // ticketing NOT YET IMPLEMENTED IN NODE API
-
-
-// stackdriver monitoring not yet implemented in node api
-
-
 
 // DEPLOYMENT of a file from github
 controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
@@ -282,6 +169,15 @@ controller.hears(['gcpbot deploy new (.*) (.*)'], ['message_received','ambient']
   });
 });
 
+function emojiForStatus(status) {
+  if (status == "PENDING") {
+    return "✋";
+  } else if (status == "RUNNING") {
+    return "🏃";
+  } else if (status == "DONE" || status == "COMPLETE") {
+    return "✅";
+  }
+}
 
 function checkDeploy( bot, message, jwtClient, depName ) {
 
@@ -300,23 +196,13 @@ function checkDeploy( bot, message, jwtClient, depName ) {
       }
 
       if( !resp.deployments ) {
-        bot.reply(message, "no deployment found");
+        bot.reply(message, "No deployment found");
         return;
       }
-
       var currDeploy = resp.deployments[0];
-
-      bot.reply(message, "Deploy " +
-        currDeploy.name + " status = " + currDeploy.operation.status + " : started at " +
-        currDeploy.operation.startTime + " by " +
-        currDeploy.operation.user);
-      if (currDeploy.operation.endTime) {
-        bot.reply(message, "Deployment completed at " + currDeploy.operation.endTime);
-      }
+      sendDeployDetailReplies(bot, message, resp.deployments[0]);
 
       if( currDeploy.operation.status != "DONE" && currDeploy.operation.status != "COMPLETE" ) {
-        bot.reply(message, "Current progress: " + currDeploy.operation.progress);
-
         setTimeout(function() {
           checkDeploy( bot, message, jwtClient, depName );
         }, 2000);
@@ -337,7 +223,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
 
             //for each resource, check status of machine - if there's an error - check logs
             resList = resp.resources;
-            bot.reply(message, "Deployment " + depName + " resource summary");
+            bot.reply(message, "Deploy *" + depName + "* resource summary:");
 
             for ( var i = 0; i < resList.length; i++ ) {
               var resName = resList[i].name;
@@ -348,7 +234,7 @@ function checkDeploy( bot, message, jwtClient, depName ) {
               if (resList[i].finalProperties) {
                 propObj = yaml.parse(resList[i].finalProperties);
               }
-              bot.reply(message, "Resource #" + i + ":");
+              bot.reply(message, "📋 Resource #" + i + ":");
               bot.reply(message, "*Name:* " + resName +
                 "\n*Type:* " + resType +
                 "\n*Machine Class:* " + propObj.machineType +
@@ -366,27 +252,26 @@ controller.hears('gcpbot help', ['message_received', 'ambient'], function (bot, 
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
       '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
+      '`gcpbot monitor metrics <filter...>` to list all metrics. Add one or more strings to filter the results (space-separated list, results match ALL strings).\n' +
+      '`gcpbot monitor <metrics...>` to show the values for a set of metrics (space-separated list).\n' +
       '`gcpbot help` to see this again.'
   bot.reply(message, help)
 })
 
-
-//this stuff doesn't really work - not sure how to get metrics back - i can see them
-// in the gcp console, but they won't show here
-controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
-
+controller.hears(['gcpbot monitor metrics (.*)', 'gcpbot monitor metrics', 'gcpbot m metrics (.*)', 'gcpbot m metrics'], ['message_received','ambient'], function (bot, message) {
   jwtClient.authorize(function(err, tokens) {
     if (err) {
       console.log(err);
       return;
     }
-
+    
+    var parsedMetrics = parseMetricsFromMessage(message);
+    var query = parsedMetrics ? parsedMetrics.join(' ') : '';
     monitoring.metricDescriptors.list({
       auth: jwtClient,
       project: projectId,
+      query: query,
       count: 100 },
-      //metric: 'compute.googleapis.com/instance/uptime',
-      //youngest: new Date().toJSON()},
       function( err, resp ) {
 
         if( err ) {
@@ -395,39 +280,212 @@ controller.hears(['gcpbot monitor', 'gcpbot m'], ['message_received','ambient'],
         }
 
         metrics = resp.metrics;
+        console.log("metrics:", metrics.length, "query:", query);
 
-        console.log("metrics: " + metrics.length);
-
+        var responseMessage = metrics.length + " metrics:";
         for( i = 0; i < metrics.length; i++ ) {
-          //console.log(metrics[i].name + " desc: " + metrics[i].description );
+          responseMessage += "\n `" + metrics[i].name + "` - " + metrics[i].description;
         }
+        bot.reply(message, responseMessage);
 
       }
     );
-
-    //compute.googleapis.com/instance/cpu/utilization
   });
+});
+
+controller.hears(['gcpbot monitor (.*)', 'gcpbot m (.*)', 'gcpbot monitor', 'gcpbot m'], ['message_received','ambient'], function (bot, message) {
 
   jwtClient.authorize(function(err, tokens) {
-    if (err) {
+    if ( err ) {
       console.log(err);
       return;
     }
+    var metrics = parseMetricsFromMessage(message) || ['compute.googleapis.com/instance/cpu/utilization']; // Parse a space-separated list of metrics
+    var responseData = {};
+    var metricsComplete = 0;
+    
+    for (var i in metrics) {
+      var metric = metrics[i];
+      responseData[metric] = []
+      monitorSeries(metric, function(metric, timeseries) {
+        if (timeseries) {
+          responseData[metric] = timeseries;
+        }
+        metricsComplete++;
+        if (metricsComplete == metrics.length) {
+          outputData(bot, message, metrics, responseData);
+        }
+      });
+    }
+  });
+});
 
-    compute.instances.list({
+function outputData(bot, message, metrics, responseData) {
+  // Swap around the data to be per instance instead of per metric
+  var instanceData = {};
+  for (var metric in responseData) {
+    var timeseries = responseData[metric];
+    for (i = 0; i < timeseries.length; i++) {
+      var instance = timeseries[i].timeseriesDesc.labels["compute.googleapis.com/instance_name"];
+      if (!instanceData[instance]) {
+        instanceData[instance] = {}
+      }
+      instanceData[instance][metric] = timeseries[i];
+    }
+  }
+  
+  // Now build one slack message per instance
+  for (var instance in instanceData) {
+    var instanceMessage = '*' + instance + '*\n';
+    
+    for (var i in metrics) {
+      var metric = metrics[i];
+      var timeseries = instanceData[instance][metric];
+      if (timeseries) {
+        var desc = timeseries.timeseriesDesc.labels["compute.googleapis.com/instance_name"]; 
+        var points = timeseries.points;
+        if (points && points.length > 0) {
+          var newestPoint = points[0];
+          var newestValue = getTimeseriesValue(newestPoint);
+          var avg = 0;
+          for( j = 0; j < points.length; j++ ) {
+              avg += getTimeseriesValue(points[j]);
+          }
+          avg = avg / points.length;
+          
+          instanceMessage += metric + ': ' + round(newestValue, 3) + ' at ' + newestPoint.end + ' *|* ' +  round(avg, 3) + ' average\n';
+        }
+      } else {
+        instanceMessage += metric + ': No data\n';
+      }
+    }
+    bot.reply(message, instanceMessage);
+  }
+}
+
+function monitorSeries(metric, callback) {
+  monitoring.timeseries.list({
       auth: jwtClient,
       project: projectId,
-      zone: zone },
-      function( err, resp ) {
-
-        if( err ) {
-          console.log(err);
-          return;
-        }
-
-        console.log( "resp: " + JSON.stringify(resp) );
+      metric: encodeURIComponent(metric),
+      youngest: new Date().toJSON()
+    },
+    function( err, resp ) {
+      if (err) {
+        console.log(err);
+        return;
       }
-    );
-  });
+      
+      if (resp.timeseries) {
+        callback(metric, resp.timeseries);
+      } else {
+        callback(metric, null);
+        console.log("timeseries response:", resp);
+      }
+    }
+  );
+}
 
-});
+function parseMetricsFromMessage(message) {
+  var metricString = message.match[1];
+  if (metricString) {
+      var metrics = metricString.trim().split(' ');
+      // Pull metric out of the Slack link syntax (because it looks like a URL)
+      for (i = 0; i < metrics.length; i++) {
+        var metric = metrics[i]
+        var result = /<.*\|(.*)>/.exec(metric);
+        if (result) {
+          metrics[i] = result[1] || metric;
+        }
+      }
+      return metrics;
+  }
+  return null;
+}
+
+function getTimeseriesValue(point) {
+  if (point.doubleValue) {
+    return parseFloat(point.doubleValue);
+  } else if (point.int64Value) {
+    return parseInt(point.int64Value);
+  }
+  return;
+}
+
+function round(value, decimals) {
+    return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
+}
+
+function sendDeployDetailReplies(bot, message, deploy, includeProgressLink) {
+  var statusIcon = emojiForStatus(deploy.operation.status);
+  var replyMessage = statusIcon + " Deploy *" +
+    deploy.name + "* Status: " + deploy.operation.status +
+    "\n*Started at*: " + deploy.operation.startTime;
+  if (deploy.operation.endTime) {
+    replyMessage += " *Completed at*: " + deploy.operation.endTime;
+  }
+  replyMessage += " by " + deploy.operation.user;
+  if (includeProgressLink) {
+    replyMessage += "\n" + deploy.operation.progress + "% complete. To view progress, navigate to " +
+      " https://console.cloud.google.com/deployments?authuser=1&project=" + process.env.PROJECT_ID
+  }
+  bot.reply(message, replyMessage);
+  
+  // print out the errors if the deployed is complete and had errors
+  if( deploy.operation.status == "DONE" || deploy.operation.status == "COMPLETE" ) {
+    if ( deploy.operation.error ) {
+      var errors = deploy.operation.error.errors;
+      for ( errorNum in errors ) {
+        var error = errors[errorNum];
+        console.log("error:", error);
+        bot.reply(message, "🚫 *Error*: " + error.code + " *location*: " + error.location + " *message*: " + error.message);
+      }
+    }
+  }
+}
+
+function listDeployments(bot, message, filterStr) {
+  var params = {
+    auth: jwtClient,
+    project: projectId,
+    region: region };
+  if (filterStr) {
+    params.filter = filterStr;
+  }
+  manager.deployments.list(params, function(err, resp) {
+      if( err) {
+        console.log(err);
+        bot.reply(message, "🚫 There was an error listing deployments.");
+        return;
+      }
+
+      if( !resp.deployments ) {
+        bot.reply(message, "No deployments to report on");
+        return;
+      }
+
+      var deployTotalCount = resp.deployments.length;
+
+      var activeDeploys = [];
+      var deadDeploys = [];
+
+      for ( i = 0; i < resp.deployments.length; i++ ) {
+          if( resp.deployments[i].operation.status != 'DONE' ) {
+            activeDeploys.push( resp.deployments[i] );
+          }
+          else {
+            deadDeploys.push( resp.deployments[i] );
+          }
+      }
+
+      bot.reply(message, "Deployments *Total Count*: " + deployTotalCount + " *Active*: " + activeDeploys.length);
+
+      for ( i = 0; i < activeDeploys.length; i++ ) {
+        sendDeployDetailReplies(bot, message, activeDeploys[i], true);
+      }
+
+      for ( i = 0; i < deadDeploys.length; i++ ) {
+        sendDeployDetailReplies(bot, message, deadDeploys[i], false);
+      }
+    });
+}
