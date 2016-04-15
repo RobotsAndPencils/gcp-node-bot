@@ -122,15 +122,17 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
   var baseURL = ghPref + repo + rawMaster;
 
   fetchConfiguration(baseURL, yamlName, function(configString, imports, errors) {
-    if (!configString) {
-      bot.reply(message, "yaml file not found: " + url.resolve(baseURL, yamlName));
-      return;
-    }
-    
     if (errors) {
       for(i = 0; i < errors.length; i++) {
         bot.reply(message, '🚫 ' + errors[i]);
       }
+    }
+    
+    if (!configString) {
+      if (!errors) {
+        bot.reply(message, "yaml file not found: " + url.resolve(baseURL, yamlName));
+      }
+      return;
     }
     
     //now do the auth and call to manifest
@@ -566,7 +568,7 @@ function fetchNextFile(files, baseURL, isConfig, callback) {
         });
       }
     } else {
-      console.log("error", error, response ? response.statusCode : 'no response');
+      body = null;
       var errorMsg = error || (response.statusCode + ' response status');
       errors.push(errorMsg + ' for ' + fileURL );
     }
