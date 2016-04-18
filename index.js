@@ -250,12 +250,14 @@ function checkDeploy( bot, message, jwtClient, depName ) {
 }
 
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
+  var packs = '`' + Object.keys(metricPackages).join('`, `') + '`';
   var help = 'I will respond to the following messages: \n' +
       '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
       '`gcpbot deploy detail <depname>` to show info and status for a given deployment manager job.\n' +
       '`gcpbot monitor metrics <filter...>` to list all metrics. Add one or more strings to filter the results (space-separated list, results match ALL strings).\n' +
+      '`gcpbot monitor pack <pack name>` to show the values for a named group of metrics. Available packs: ' + packs + '.\n' +
       '`gcpbot monitor <metrics...>` to show the values for a set of metrics (space-separated list).\n' +
       '`gcpbot help` to see this again.';
   bot.reply(message, help);
@@ -314,8 +316,8 @@ controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambien
       var metrics = metricPackages[metricString].metrics;
       monitorMetrics(bot, message, metrics);
     } else {
-      var packages = Object.keys(metricPackages).join('`, `');
-      bot.reply(message, 'Metric pack name is required. Try one of: `' + packages + '`');
+      var packages = '`' + Object.keys(metricPackages).join('`, `') + '`';
+      bot.reply(message, 'Metric pack name is required. Try one of: ' + metricPackages);
     }
   });
 });
