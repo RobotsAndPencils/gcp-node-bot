@@ -5,7 +5,7 @@ var http = require('http');
 var request = require('request');
 var google = require('googleapis');
 var manager = google.deploymentmanager('v2');
-var monitoring = google.cloudmonitoring('v2beta2');
+var monitoring = google.monitoring('v3');
 var compute = google.compute('v1');
 var yaml = require('yamljs');
 var path = require('path');
@@ -270,12 +270,14 @@ controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','amb
     
     var metricString = message.match[3];
     var parsedMetrics = parseMetricsFromMessage(metricString);
-    var query = parsedMetrics ? parsedMetrics.join(' ') : '';
-    monitoring.metricDescriptors.list({
+    var query = '';
+    if (parsedMetrics) {
+      query = 'metric.type : "' + parsedMetrics.join('" AND metric.type : "') + '"';
+    }
+    monitoring.projects.metricDescriptors.list({
       auth: jwtClient,
-      project: projectId,
-      query: query,
-      count: 100 },
+      name: 'projects/' + projectId,
+      filter: query },
       function( err, resp ) {
 
         if( err ) {
@@ -283,12 +285,13 @@ controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','amb
           return;
         }
 
-        metrics = resp.metrics;
+        metrics = resp.metricDescriptors;
         console.log("metrics:", metrics.length, "query:", query);
 
-        var responseMessage = metrics.length + " metrics:";
-        for( i = 0; i < metrics.length; i++ ) {
-          responseMessage += "\n `" + metrics[i].name + "` - " + metrics[i].description;
+        var limit = Math.min(50, metrics.length);
+        var responseMessage = limit >= metrics.length ? (metrics.length + " metrics:") : limit + ' of ' + metrics.length + ' metrics. Filter the results to find what you are looking for.';
+        for( i = 0; i < limit; i++ ) {
+          responseMessage += "\n `" + metrics[i].type + "` - " + metrics[i].description;
         }
         bot.reply(message, responseMessage);
 
@@ -339,12 +342,12 @@ function monitorMetrics(bot, message, metrics) {
   var responseData = {};
   var metricsComplete = 0;
   
-  var monitorCallback = function(metric, timeseries, error) {
+  var monitorCallback = function(metric, timeSeries, error) {
     if (error) {
       bot.reply(message, error.message);
     }
-    if (timeseries) {
-      responseData[metric] = timeseries;
+    if (timeSeries) {
+      responseData[metric] = timeSeries;
     }
     metricsComplete++;
     if (metricsComplete == metrics.length) {
@@ -362,42 +365,43 @@ function monitorMetrics(bot, message, metrics) {
 function invertMetricsData(responseData) {
   var instanceData = {};
   for (var metric in responseData) {
-    var timeseries = responseData[metric];
-    for (var i = 0; i < timeseries.length; i++) {
-      var instance = timeseries[i].timeseriesDesc.labels["compute.googleapis.com/instance_name"];
+    var timeSeries = responseData[metric];
+    for (var i = 0; i < timeSeries.length; i++) {
+      var instance = timeSeries[i].metric.labels.instance_name;
       if (!instanceData[instance]) {
         instanceData[instance] = {};
       }
-      instanceData[instance][metric] = timeseries[i];
+      instanceData[instance][metric] = timeSeries[i];
     }
   }
   return instanceData;
 }
 
-function outputMetricsData(bot, message, metrics, responseData) {
+function outputMetricsData(bot, message, metrics, responseData) {  
   // Swap around the data to be per instance instead of per metric
   var instanceData = invertMetricsData(responseData);
   
   // Now build one slack message per instance
+  var hasData = false;
   for (var instance in instanceData) {
+    hasData = true;
     var instanceMessage = '*' + instance + '*\n';
     
     for (var i in metrics) {
       var metric = metrics[i];
-      var timeseries = instanceData[instance][metric];
-      if (timeseries) {
-        var desc = timeseries.timeseriesDesc.labels["compute.googleapis.com/instance_name"]; 
-        var points = timeseries.points;
+      var timeSeries = instanceData[instance][metric];
+      if (timeSeries) {
+        var points = timeSeries.points;
         if (points && points.length > 0) {
           var newestPoint = points[0];
-          var newestValue = getTimeseriesValue(newestPoint);
+          var newestValue = getTimeSeriesValue(newestPoint);
           var avg = 0;
           for( j = 0; j < points.length; j++ ) {
-              avg += getTimeseriesValue(points[j]);
+              avg += getTimeSeriesValue(points[j]);
           }
           avg = avg / points.length;
           
-          instanceMessage += metric + ': ' + round(newestValue, 3) + ' at ' + newestPoint.end + ' *|* ' +  round(avg, 3) + ' average\n';
+          instanceMessage += metric + ': ' + round(newestValue, 3) + ' at ' + newestPoint.interval.endTime + ' *|* ' +  round(avg, 3) + ' average\n';
         }
       } else {
         instanceMessage += metric + ': No data\n';
@@ -405,14 +409,21 @@ function outputMetricsData(bot, message, metrics, responseData) {
     }
     bot.reply(message, instanceMessage);
   }
+  
+  if (!hasData) {
+    bot.reply(message, 'No monitor data returned.');
+  }
 }
 
 function monitorSeries(metric, callback) {
-  monitoring.timeseries.list({
+  var startDate = new Date();
+  startDate.setHours(startDate.getHours() - 1);
+  monitoring.projects.timeSeries.list({
       auth: jwtClient,
-      project: projectId,
-      metric: encodeURIComponent(metric),
-      youngest: new Date().toJSON()
+      name: 'projects/' + projectId,
+      filter: 'metric.type = "' + metric + '"',
+      'interval.startTime': startDate.toJSON(),
+      'interval.endTime': new Date().toJSON()
     },
     function( err, resp ) {
       if (err) {
@@ -421,11 +432,11 @@ function monitorSeries(metric, callback) {
         return;
       }
       
-      if (resp.timeseries) {
-        callback(metric, resp.timeseries);
+      if (resp.timeSeries) {
+        callback(metric, resp.timeSeries);
       } else {
         callback(metric);
-        console.log("timeseries response:", resp);
+        console.log("timeSeries response:", resp);
       }
     }
   );
@@ -447,11 +458,11 @@ function parseMetricsFromMessage(metricString) {
   return null;
 }
 
-function getTimeseriesValue(point) {
-  if (point.doubleValue) {
-    return parseFloat(point.doubleValue);
-  } else if (point.int64Value) {
-    return parseInt(point.int64Value);
+function getTimeSeriesValue(point) {
+  if (point.value.doubleValue) {
+    return parseFloat(point.value.doubleValue);
+  } else if (point.value.int64Value) {
+    return parseInt(point.value.int64Value);
   }
   return;
 }
@@ -555,7 +566,7 @@ function fetchNextFile(files, baseURL, isConfig, callback) {
   var fileImports = [];
   var errors = [];
   var fileURL = url.resolve(baseURL, file.path);
-  console.log('fetching ', fileURL);
+  console.log('fetching', isConfig ? 'config' : 'template', fileURL);
 
   request(fileURL, function (error, response, body) {
     if (!error && response.statusCode == 200) {
