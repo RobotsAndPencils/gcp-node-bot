@@ -11,6 +11,8 @@ var yaml = require('yamljs');
 var path = require('path');
 var url = require('url');
 var metricPackages = require('./metricPackages');
+var GoogleChart = require('./googlechart');
+var utils = require('./utils');
 
 // Expect a SLACK_TOKEN environment variable
 var slackToken = process.env.SLACK_TOKEN;
@@ -385,31 +387,51 @@ function outputMetricsData(bot, message, metrics, responseData) {
   
   // Now build one slack message per instance
   var hasData = false;
+  var count = 0;
   for (var instance in instanceData) {
     hasData = true;
     var instanceMessage = '*' + instance + '*\n';
+    var chart = new GoogleChart(400, 150);
+    var attachments = [];
     
     for (var i in metrics) {
       var metric = metrics[i];
       var timeSeries = instanceData[instance][metric];
+      var attachment = {
+        'title': metric,
+        'color': 'good'
+      };
       if (timeSeries) {
+        var values = [];
         var points = timeSeries.points;
         if (points && points.length > 0) {
           var newestPoint = points[0];
+          var oldestPoint = points[points.length-1];
           var newestValue = getTimeSeriesValue(newestPoint);
-          var avg = 0;
           for( j = 0; j < points.length; j++ ) {
-              avg += getTimeSeriesValue(points[j]);
+              value = getTimeSeriesValue(points[j]);
+              values.push(value);
           }
-          avg = avg / points.length;
           
-          instanceMessage += metric + ': ' + round(newestValue, 3) + ' at ' + newestPoint.interval.endTime + ' *|* ' +  round(avg, 3) + ' average\n';
+          var startTime = new Date(oldestPoint.interval.startTime);
+          var endTime = new Date(newestPoint.interval.endTime);
+          var imageUrl = chart.buildUrl(values, metric, startTime, endTime);
+          attachment.image_url = imageUrl;
+          attachment.title_link = imageUrl;
+          attachment.fallback = utils.round(newestValue, 3) + ' at ' + newestPoint.interval.endTime;
         }
       } else {
-        instanceMessage += metric + ': No data\n';
+        attachment.text = 'No data\n';
+        attachment.color = 'warning';
       }
+      attachments.push(attachment);
     }
-    bot.reply(message, instanceMessage);
+    
+    bot.reply(message, {
+      'text': instanceMessage,
+      'username': bot.identity.name, // Required to add image attachments
+      'attachments': attachments
+    }); 
   }
   
   if (!hasData) {
@@ -419,13 +441,15 @@ function outputMetricsData(bot, message, metrics, responseData) {
 
 function monitorSeries(metric, callback) {
   var startDate = new Date();
-  startDate.setHours(startDate.getHours() - 1);
+  var endDate = new Date();
+  startDate.setDate(startDate.getDate() - 1);
+  
   monitoring.projects.timeSeries.list({
       auth: jwtClient,
       name: 'projects/' + projectId,
       filter: 'metric.type = "' + metric + '"',
       'interval.startTime': startDate.toJSON(),
-      'interval.endTime': new Date().toJSON()
+      'interval.endTime': endDate.toJSON(),
     },
     function( err, resp ) {
       if (err) {
@@ -467,10 +491,6 @@ function getTimeSeriesValue(point) {
     return parseInt(point.value.int64Value);
   }
   return;
-}
-
-function round(value, decimals) {
-    return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
 }
 
 function sendDeployDetailReplies(bot, message, deploy, includeProgressLink) {
