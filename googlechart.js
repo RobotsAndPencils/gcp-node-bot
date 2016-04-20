@@ -1,4 +1,4 @@
-var utils = require('./utils');
+var Utils = require('./utils');
 
 function GoogleChart(width, height) {
   this.width = width;
@@ -15,7 +15,7 @@ function scaleData(values) {
   var min = Number.MAX_SAFE_INTEGER;
   var max = 0;
   for(var i = 0; i <= values.length; i++) { 
-      var value = utils.round(values[i] * scaleFactor, 0);
+      var value = Utils.round(values[i] * scaleFactor, 0);
       if(value) {
       data.push(value);
       if (value < min) {
@@ -43,7 +43,7 @@ function generateAxisLabels(max, scaleFactor) {
   var yAxisLabels = [];
   var skipCount = max / 5;
   for(var j = 0; j <= max; j += skipCount) {
-      yAxisLabels.push(utils.round(j / scaleFactor, 3));
+      yAxisLabels.push(Utils.round(j / scaleFactor, 3));
   }
   return yAxisLabels;
 }
