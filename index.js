@@ -33,11 +33,18 @@ if (!region) {
   process.exit(1);
 }
 
-// TODO change this or just remove once auth is done
-var keyfile = 'gcp-test-c4e5388e828e.json';
+var private_key = process.env.PRIVATE_KEY;
+if (!private_key) {
+  console.error('PRIVATE_KEY is required!');
+  process.exit(1);
+}
+var client_email = process.env.CLIENT_EMAIL;
+if (!client_email) {
+  console.error('CLIENT_EMAIL is required!');
+  process.exit(1);
+}
 
-var key = require("./" + keyfile);
-var jwtClient = new google.auth.JWT(key.client_email, null, key.private_key,
+var jwtClient = new google.auth.JWT(client_email, null, private_key,
   [
     'https://www.googleapis.com/auth/ndev.cloudman',
     'https://www.googleapis.com/auth/cloud-platform',

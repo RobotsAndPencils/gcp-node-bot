@@ -1,24 +1,23 @@
-name: nodebot
-description: A simple node.js starter bot for Beep Boop
+name: gcpbot
+description: A bot to interact with Google Cloud Platform
 avatar: images/gcp-avatar.png
 #background: resources/background.png
 config:
   - name: PROJECT_ID
     friendly_name: GCP Project id
     type: text
-  - name: PRIVATE_KEY_ID
-    info: The private_key_id from your gcp authn json file
-    friendly_name: Private Key Id
-    type: secret
-  - name: PRIVATE_KEY
-    info: The private_key from your gcp authn json file
-    friendly_name: Private Key
-    type: secret
-  - name: CLIENT_EMAIL
-    info: The client_email from your gcp authn json file
-    friendly_name:  Client Email
+    global: true
+  - name: PROJECT_REGION
+    friendly_name: GCP Project Region
     type: text
-  - name: CLIENT_ID
-    info: The client_id from your gcp authn json file
-    friendly_name: Client ID
+    global: true
+  - name: CLIENT_EMAIL
+    friendly_name:  Client Email
+    info: The client_email from your gcp authn json file
+    type: text
+    global: true
+  - name: PRIVATE_KEY
+    friendly_name: Private Key
+    info: The private_key from your gcp authn json file
     type: secret
+    global: true
