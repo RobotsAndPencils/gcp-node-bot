@@ -91,10 +91,8 @@ controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambien
   var metricString = (message.match[3] || '').trim();
   
   // First see if there's a named package
-  if (Metrics.packages[metricString]) {
-    var metrics = Metrics.packages[metricString].metrics;
-    gcpClient.monitorMetricList(bot, message, metrics);
-  } else {
+  var result = gcpClient.monitorMetricPack(bot, message, metricString);
+  if (!result) {
     var packages = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
     bot.reply(message, 'Metric pack name is required. Try one of: ' + Metrics.packages);
   }
