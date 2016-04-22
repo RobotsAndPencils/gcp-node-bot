@@ -4,37 +4,20 @@ var yaml = require('yamljs');
 var Metrics = require('./lib/metrics');
 var GCPClient = require('./lib/gcpclient');
 
-// Expect a SLACK_TOKEN environment variable
-var slackToken = process.env.SLACK_TOKEN;
-if (!slackToken) {
-  console.error('SLACK_TOKEN is required!');
-  process.exit(1);
+function requireEnvVariable(name) {
+  var value = process.env[name];
+  if(!value) {
+    throw new Error(name + 'is required!');
+  }
+  return value;
 }
 
-// Expect a PROJECT_ID environment variable
-var projectId = process.env.PROJECT_ID;
-if (!projectId) {
-  console.error('PROJECT_ID is required!');
-  process.exit(1);
-}
-
-// Expect a PROJECT_REGION environment variable
-var region = process.env.PROJECT_REGION;
-if (!region) {
-  console.error('PROJECT_REGION is required!');
-  process.exit(1);
-}
-
-var private_key = process.env.PRIVATE_KEY;
-if (!private_key) {
-  console.error('PRIVATE_KEY is required!');
-  process.exit(1);
-}
-var client_email = process.env.CLIENT_EMAIL;
-if (!client_email) {
-  console.error('CLIENT_EMAIL is required!');
-  process.exit(1);
-}
+// Expect a bunch of environment variables
+var slackToken = requireEnvVariable('SLACK_TOKEN');
+var projectId = requireEnvVariable('PROJECT_ID');
+var region = requireEnvVariable('PROJECT_REGION');
+var private_key = requireEnvVariable('PRIVATE_KEY');
+var client_email = requireEnvVariable('CLIENT_EMAIL');
 
 var jwtClient = new google.auth.JWT(client_email, null, private_key,
   [
