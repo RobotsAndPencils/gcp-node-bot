@@ -3,14 +3,6 @@ description: A bot to interact with Google Cloud Platform
 avatar: images/gcp-avatar.png
 #background: resources/background.png
 config:
-  - name: PROJECT_ID
-    friendly_name: GCP Project id
-    type: text
-    global: true
-  - name: PROJECT_REGION
-    friendly_name: GCP Project Region
-    type: text
-    global: true
   - name: CLIENT_EMAIL
     friendly_name:  Client Email
     info: The client_email from your gcp authn json file

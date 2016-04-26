@@ -7,15 +7,13 @@ var GCPClient = require('./lib/gcpclient');
 function requireEnvVariable(name) {
   var value = process.env[name];
   if(!value) {
-    throw new Error(name + 'is required!');
+    throw new Error(name + ' is required!');
   }
   return value;
 }
 
 // Expect a bunch of environment variables
 var slackToken = requireEnvVariable('SLACK_TOKEN');
-var projectId = requireEnvVariable('PROJECT_ID');
-var region = requireEnvVariable('PROJECT_REGION');
 var private_key = requireEnvVariable('PRIVATE_KEY');
 var client_email = requireEnvVariable('CLIENT_EMAIL');
 
@@ -26,8 +24,10 @@ var jwtClient = new google.auth.JWT(client_email, null, private_key,
     'https://www.googleapis.com/auth/monitoring',
   ], null);
 
-var gcpClient = new GCPClient(jwtClient, projectId, region);
-var controller = Botkit.slackbot();
+var gcpClient = new GCPClient(jwtClient);
+var controller = Botkit.slackbot({
+  json_file_store: './userdata/'
+});
 var bot = controller.spawn({
   token: slackToken
 });
@@ -42,9 +42,20 @@ controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!");
 });
 
+controller.hears(['gcpbot setup (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
+  var projectId = message.match[1].trim();
+  var region = message.match[2].trim();
+  
+  saveUserData(message.user, projectId, region);
+  bot.reply(message, 'Ok, using project `' + projectId + '` in region `' + region + '`');
+});
+
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
   var depId = message.match[2].trim();
-  gcpClient.showDeployDetail(bot, message, depId);
+  
+  getUserData(message.user).then(function(userData) {
+    gcpClient.showDeployDetail(userData, bot, message, depId);
+  });
 });
 
 controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient'], function (bot, message) {
@@ -52,11 +63,16 @@ controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient
   var email = user.substring( user.indexOf(':') + 1, user.indexOf('|'));
   console.log(email);
 
-  gcpClient.showDeploySummary(bot, message, email);
+
+  getUserData(message.user).then(function(userData) {
+    gcpClient.showDeploySummary(userData, bot, message, email);
+  });
 });
 
 controller.hears(['gcpbot deploy list'], ['message_received','ambient'], function (bot, message) {
-  gcpClient.showDeployList(bot, message);
+  getUserData(message.user).then(function(userData) {
+    gcpClient.showDeployList(userData, bot, message);
+  });
 });
 
 // DEPLOYMENT of a file from github
@@ -64,12 +80,15 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
   var repo = message.match[2].trim();
   var depFile = message.match[3].trim();
   
-  gcpClient.newDeploy(bot, message, repo, depFile);
+  getUserData(message.user).then(function(userData) {
+    gcpClient.newDeploy(userData, bot, message, repo, depFile);
+  });
 });
 
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
   var packs = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
   var help = 'I will respond to the following messages: \n' +
+      '`gcpbot setup <projectId> <region>` to select a project and region to manage. This is a per user setting. You can change it at any time.\n' +
       '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
@@ -84,15 +103,21 @@ controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bo
 controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','ambient'], function (bot, message) {
   var metricString = message.match[3];
   var parsedMetrics = parseMetricsFromMessage(metricString);
-  gcpClient.listMetrics(bot, message, parsedMetrics);
+  
+  getUserData(message.user).then(function(userData) {
+    gcpClient.listMetrics(userData, bot, message, parsedMetrics);
+  });
 });
 
 controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambient'], function (bot, message) {
   var metricString = (message.match[3] || '').trim();
   
   // First see if there's a named package
-  var result = gcpClient.monitorMetricPack(bot, message, metricString);
-  if (!result) {
+  if(Metrics.packages[metricString]) {
+    getUserData(message.user).then(function(userData) {
+      gcpClient.monitorMetricPack(userData, bot, message, metricString);
+    });
+  } else {
     var packages = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
     bot.reply(message, 'Metric pack name is required. Try one of: ' + Metrics.packages);
   }
@@ -101,8 +126,10 @@ controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambien
 controller.hears(['gcpbot m(onitor)?(.*)?'], ['message_received','ambient'], function (bot, message) {
   var metricString = message.match[2];
   var metrics = parseMetricsFromMessage(metricString);
-  if ( metrics ) {
-    gcpClient.monitorMetricList(bot, message, metrics);
+  if (metrics) {
+    getUserData(message.user).then(function(userData) {
+      gcpClient.monitorMetricList(userData, bot, message, metrics);
+    });
   } else {
     bot.reply(message, "Metrics are required.");
   }
@@ -122,4 +149,29 @@ function parseMetricsFromMessage(metricString) {
       return metrics;
   }
   return null;
+}
+
+function getUserData(user) {
+  return new Promise(function (fulfill, reject){
+    controller.storage.users.get(user, function(err, userData) {
+      if(err) {
+        reject(err);
+      } else {
+        fulfill(userData);
+      }
+    });
+  });
+}
+
+function saveUserData(user, projectId, region) {
+  var userData = {
+    id: user,
+    projectId: projectId,
+    region: region
+  };
+  controller.storage.users.save(userData, function(err) { 
+    if(err) {
+      console.error('Error saving user data:', err);
+    } 
+  });
 }
