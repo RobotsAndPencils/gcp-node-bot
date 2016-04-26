@@ -55,7 +55,7 @@ controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'
   
   getUserData(message.user).then(function(userData) {
     gcpClient.showDeployDetail(userData, bot, message, depId);
-  });
+  }, userDataErrorHandler(bot, message));
 });
 
 controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient'], function (bot, message) {
@@ -63,16 +63,15 @@ controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient
   var email = user.substring( user.indexOf(':') + 1, user.indexOf('|'));
   console.log(email);
 
-
   getUserData(message.user).then(function(userData) {
     gcpClient.showDeploySummary(userData, bot, message, email);
-  });
+  }, userDataErrorHandler(bot, message));
 });
 
 controller.hears(['gcpbot deploy list'], ['message_received','ambient'], function (bot, message) {
   getUserData(message.user).then(function(userData) {
     gcpClient.showDeployList(userData, bot, message);
-  });
+  }, userDataErrorHandler(bot, message));
 });
 
 // DEPLOYMENT of a file from github
@@ -82,7 +81,7 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
   
   getUserData(message.user).then(function(userData) {
     gcpClient.newDeploy(userData, bot, message, repo, depFile);
-  });
+  }, userDataErrorHandler(bot, message));
 });
 
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
@@ -106,7 +105,7 @@ controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','amb
   
   getUserData(message.user).then(function(userData) {
     gcpClient.listMetrics(userData, bot, message, parsedMetrics);
-  });
+  }, userDataErrorHandler(bot, message));
 });
 
 controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambient'], function (bot, message) {
@@ -116,7 +115,7 @@ controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambien
   if(Metrics.packages[metricString]) {
     getUserData(message.user).then(function(userData) {
       gcpClient.monitorMetricPack(userData, bot, message, metricString);
-    });
+    }, userDataErrorHandler(bot, message));
   } else {
     var packages = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
     bot.reply(message, 'Metric pack name is required. Try one of: ' + Metrics.packages);
@@ -129,7 +128,7 @@ controller.hears(['gcpbot m(onitor)?(.*)?'], ['message_received','ambient'], fun
   if (metrics) {
     getUserData(message.user).then(function(userData) {
       gcpClient.monitorMetricList(userData, bot, message, metrics);
-    });
+    }, userDataErrorHandler(bot, message));
   } else {
     bot.reply(message, "Metrics are required.");
   }
@@ -149,6 +148,12 @@ function parseMetricsFromMessage(metricString) {
       return metrics;
   }
   return null;
+}
+
+function userDataErrorHandler(bot, message) {
+  return function(err) {
+    bot.reply(message, 'You need to tell me what project to use first. Use `gcpbot setup <projectId> <region>` to select a project and region to manage.');
+  };
 }
 
 function getUserData(user) {
