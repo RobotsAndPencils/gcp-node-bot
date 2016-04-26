@@ -24,13 +24,22 @@ var jwtClient = new google.auth.JWT(client_email, null, private_key,
     'https://www.googleapis.com/auth/monitoring',
   ], null);
 
-var gcpClient = new GCPClient(jwtClient);
 var controller = Botkit.slackbot({
   json_file_store: './userdata/'
 });
 var bot = controller.spawn({
   token: slackToken
 });
+
+function replier(bot, message) {
+  return function(reply) {
+    if(!(reply instanceof String)) {
+      // Required to add image attachments
+      reply.username = bot.identity.name;
+    }
+    bot.reply(message, reply);
+  };
+}
 
 bot.startRTM(function (err, bot, payload) {
   if (err) {
@@ -51,37 +60,40 @@ controller.hears(['gcpbot setup (.*) (.*)'], ['message_received','ambient'], fun
 });
 
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
+  var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   var depId = message.match[2].trim();
-  
   getUserData(message.user).then(function(userData) {
-    gcpClient.showDeployDetail(userData, bot, message, depId);
-  }, userDataErrorHandler(bot, message));
+    return gcpClient.showDeployDetail(userData, depId);
+  }, userDataErrorHandler(gcpClient.replier));
 });
 
 controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient'], function (bot, message) {
+  var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   var user = message.match[2].trim();
   var email = user.substring( user.indexOf(':') + 1, user.indexOf('|'));
   console.log(email);
 
   getUserData(message.user).then(function(userData) {
-    gcpClient.showDeploySummary(userData, bot, message, email);
-  }, userDataErrorHandler(bot, message));
+    return gcpClient.showDeploySummary(userData, email);
+  }, userDataErrorHandler(gcpClient.replier));
 });
 
 controller.hears(['gcpbot deploy list'], ['message_received','ambient'], function (bot, message) {
+  var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   getUserData(message.user).then(function(userData) {
-    gcpClient.showDeployList(userData, bot, message);
-  }, userDataErrorHandler(bot, message));
+    return gcpClient.showDeployList(userData);
+  }, userDataErrorHandler(gcpClient.replier));
 });
 
 // DEPLOYMENT of a file from github
 controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
+  var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   var repo = message.match[2].trim();
   var depFile = message.match[3].trim();
   
   getUserData(message.user).then(function(userData) {
-    gcpClient.newDeploy(userData, bot, message, repo, depFile);
-  }, userDataErrorHandler(bot, message));
+    return gcpClient.newDeploy(userData, repo, depFile);
+  }, userDataErrorHandler(gcpClient.replier));
 });
 
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
@@ -100,12 +112,13 @@ controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bo
 });
 
 controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','ambient'], function (bot, message) {
+  var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   var metricString = message.match[3];
   var parsedMetrics = parseMetricsFromMessage(metricString);
   
   getUserData(message.user).then(function(userData) {
-    gcpClient.listMetrics(userData, bot, message, parsedMetrics);
-  }, userDataErrorHandler(bot, message));
+    return gcpClient.listMetrics(userData, parsedMetrics);
+  }, userDataErrorHandler(gcpClient.replier));
 });
 
 controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambient'], function (bot, message) {
@@ -113,9 +126,10 @@ controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambien
   
   // First see if there's a named package
   if(Metrics.packages[metricString]) {
+    var gcpClient = new GCPClient(jwtClient, replier(bot, message));
     getUserData(message.user).then(function(userData) {
-      gcpClient.monitorMetricPack(userData, bot, message, metricString);
-    }, userDataErrorHandler(bot, message));
+      return gcpClient.monitorMetricPack(userData, metricString);
+    }, userDataErrorHandler(gcpClient.replier));
   } else {
     var packages = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
     bot.reply(message, 'Metric pack name is required. Try one of: ' + Metrics.packages);
@@ -126,9 +140,10 @@ controller.hears(['gcpbot m(onitor)?(.*)?'], ['message_received','ambient'], fun
   var metricString = message.match[2];
   var metrics = parseMetricsFromMessage(metricString);
   if (metrics) {
+    var gcpClient = new GCPClient(jwtClient, replier(bot, message));
     getUserData(message.user).then(function(userData) {
-      gcpClient.monitorMetricList(userData, bot, message, metrics);
-    }, userDataErrorHandler(bot, message));
+      return gcpClient.monitorMetricList(userData, metrics);
+    }, userDataErrorHandler(gcpClient.replier));
   } else {
     bot.reply(message, "Metrics are required.");
   }
@@ -150,9 +165,9 @@ function parseMetricsFromMessage(metricString) {
   return null;
 }
 
-function userDataErrorHandler(bot, message) {
+function userDataErrorHandler(replier) {
   return function(err) {
-    bot.reply(message, 'You need to tell me what project to use first. Use `gcpbot setup <projectId> <region>` to select a project and region to manage.');
+    replier('You need to tell me what project to use first. Use `gcpbot setup <projectId> <region>` to select a project and region to manage.');
   };
 }
 
