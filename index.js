@@ -3,6 +3,7 @@ var google = require('googleapis');
 var yaml = require('yamljs');
 var Metrics = require('./lib/metrics');
 var GCPClient = require('./lib/gcpclient');
+var BotData = require('./lib/botdata');
 
 function requireEnvVariable(name) {
   var value = process.env[name];
@@ -30,6 +31,7 @@ var controller = Botkit.slackbot({
 var bot = controller.spawn({
   token: slackToken
 });
+var botData = new BotData(controller);
 
 function replier(bot, message) {
   return function(reply) {
@@ -54,15 +56,18 @@ controller.on('bot_channel_join', function (bot, message) {
 controller.hears(['gcpbot setup (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
   var projectId = message.match[1].trim();
   var region = message.match[2].trim();
-  
-  saveUserData(message.user, projectId, region);
+  var data = {
+    projectId: projectId,
+    region: region
+  };
+  botData.saveUserChannelData(message.user, message.channel, data);
   bot.reply(message, 'Ok, using project `' + projectId + '` in region `' + region + '`');
 });
 
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
   var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   var depId = message.match[2].trim();
-  getUserData(message.user).then(function(userData) {
+  botData.getUserChannelData(message.user, message.channel).then(function(userData) {
     return gcpClient.showDeployDetail(userData, depId);
   }, userDataErrorHandler(gcpClient.replier));
 });
@@ -73,14 +78,14 @@ controller.hears(['gcpbot d(eploy)? summary (.*)'], ['message_received','ambient
   var email = user.substring( user.indexOf(':') + 1, user.indexOf('|'));
   console.log(email);
 
-  getUserData(message.user).then(function(userData) {
+  botData.getUserChannelData(message.user, message.channel).then(function(userData) {
     return gcpClient.showDeploySummary(userData, email);
   }, userDataErrorHandler(gcpClient.replier));
 });
 
 controller.hears(['gcpbot deploy list'], ['message_received','ambient'], function (bot, message) {
   var gcpClient = new GCPClient(jwtClient, replier(bot, message));
-  getUserData(message.user).then(function(userData) {
+  botData.getUserChannelData(message.user, message.channel).then(function(userData) {
     return gcpClient.showDeployList(userData);
   }, userDataErrorHandler(gcpClient.replier));
 });
@@ -91,7 +96,7 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
   var repo = message.match[2].trim();
   var depFile = message.match[3].trim();
   
-  getUserData(message.user).then(function(userData) {
+  botData.getUserChannelData(message.user, message.channel).then(function(userData) {
     return gcpClient.newDeploy(userData, repo, depFile);
   }, userDataErrorHandler(gcpClient.replier));
 });
@@ -116,7 +121,7 @@ controller.hears(['gcpbot m(onitor)? m(etrics)?(.*)?'], ['message_received','amb
   var metricString = message.match[3];
   var parsedMetrics = parseMetricsFromMessage(metricString);
   
-  getUserData(message.user).then(function(userData) {
+  botData.getUserChannelData(message.user, message.channel).then(function(userData) {
     return gcpClient.listMetrics(userData, parsedMetrics);
   }, userDataErrorHandler(gcpClient.replier));
 });
@@ -127,7 +132,7 @@ controller.hears(['gcpbot m(onitor)? p(ack)?(.*)?'], ['message_received','ambien
   // First see if there's a named package
   if(Metrics.packages[metricString]) {
     var gcpClient = new GCPClient(jwtClient, replier(bot, message));
-    getUserData(message.user).then(function(userData) {
+    botData.getUserChannelData(message.user, message.channel).then(function(userData) {
       return gcpClient.monitorMetricPack(userData, metricString);
     }, userDataErrorHandler(gcpClient.replier));
   } else {
@@ -141,7 +146,7 @@ controller.hears(['gcpbot m(onitor)?(.*)?'], ['message_received','ambient'], fun
   var metrics = parseMetricsFromMessage(metricString);
   if (metrics) {
     var gcpClient = new GCPClient(jwtClient, replier(bot, message));
-    getUserData(message.user).then(function(userData) {
+    botData.getUserChannelData(message.user, message.channel).then(function(userData) {
       return gcpClient.monitorMetricList(userData, metrics);
     }, userDataErrorHandler(gcpClient.replier));
   } else {
@@ -169,29 +174,4 @@ function userDataErrorHandler(replier) {
   return function(err) {
     replier('You need to tell me what project to use first. Use `gcpbot setup <projectId> <region>` to select a project and region to manage.');
   };
-}
-
-function getUserData(user) {
-  return new Promise(function (fulfill, reject){
-    controller.storage.users.get(user, function(err, userData) {
-      if(err) {
-        reject(err);
-      } else {
-        fulfill(userData);
-      }
-    });
-  });
-}
-
-function saveUserData(user, projectId, region) {
-  var userData = {
-    id: user,
-    projectId: projectId,
-    region: region
-  };
-  controller.storage.users.save(userData, function(err) { 
-    if(err) {
-      console.error('Error saving user data:', err);
-    } 
-  });
 }
