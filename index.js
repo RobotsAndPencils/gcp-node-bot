@@ -32,6 +32,12 @@ var bot = controller.spawn({
   token: slackToken
 });
 var botData = new BotData(controller);
+bot.startRTM(function (err, bot, payload) {
+  if (err) {
+    throw new Error('Could not connect to Slack');
+  }
+  botData.fetchBotIdentity(bot);
+});
 
 function replier(bot, message) {
   return function(reply) {
@@ -43,11 +49,6 @@ function replier(bot, message) {
   };
 }
 
-bot.startRTM(function (err, bot, payload) {
-  if (err) {
-    throw new Error('Could not connect to Slack');
-  }
-});
 
 controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!");
