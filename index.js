@@ -53,15 +53,14 @@ controller.on('bot_channel_join', function (bot, message) {
   bot.reply(message, "I'm here!");
 });
 
-controller.hears(['gcpbot setup (.*) (.*)'], ['message_received','ambient'], function (bot, message) {
+controller.hears(['gcpbot project (.*)'], ['message_received','ambient'], function (bot, message) {
   var projectId = message.match[1].trim();
-  var region = message.match[2].trim();
   var data = {
-    projectId: projectId,
-    region: region
+    projectId: projectId
   };
   botData.saveUserChannelData(message.user, message.channel, data);
-  bot.reply(message, 'Ok, using project `' + projectId + '` in region `' + region + '`');
+  bot.reply(message, 'Ok, using project `' + projectId + '` in this channel');
+});
 });
 
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
@@ -104,7 +103,7 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
   var packs = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
   var help = 'I will respond to the following messages: \n' +
-      '`gcpbot setup <projectId> <region>` to select a project and region to manage. This is a per user setting. You can change it at any time.\n' +
+      '`gcpbot project <projectId>` to select a project to use for the other commands in this channel. This is a per user setting. You can change it at any time.\n' +
       '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
       '`gcpbot deploy new <repo> <depfile>` to create a new deployment using a yaml file in the github repo identified with a yaml file called <depfile>.yaml.\n' +
@@ -172,6 +171,6 @@ function parseMetricsFromMessage(metricString) {
 
 function userDataErrorHandler(replier) {
   return function(err) {
-    replier('You need to tell me what project to use first. Use `gcpbot setup <projectId> <region>` to select a project and region to manage.');
+    replier('You need to tell me what project to use first. Use `gcpbot project <projectId>` to select a project to manage.');
   };
 }
