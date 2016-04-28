@@ -1,9 +1,11 @@
 var Botkit = require('botkit');
+var CronJob = require('cron').CronJob;
 var google = require('googleapis');
 var yaml = require('yamljs');
 var Metrics = require('./lib/metrics');
 var GCPClient = require('./lib/gcpclient');
 var BotData = require('./lib/botdata');
+var Scheduler = require('./lib/scheduler');
 
 function requireEnvVariable(name) {
   var value = process.env[name];
@@ -28,10 +30,11 @@ var jwtClient = new google.auth.JWT(client_email, null, private_key,
 var controller = Botkit.slackbot({
   json_file_store: './userdata/'
 });
+var botData = new BotData(controller);
+var scheduler = new Scheduler();
 var bot = controller.spawn({
   token: slackToken
 });
-var botData = new BotData(controller);
 bot.startRTM(function (err, bot, payload) {
   if (err) {
     throw new Error('Could not connect to Slack');
@@ -41,17 +44,58 @@ bot.startRTM(function (err, bot, payload) {
 
 function replier(bot, message) {
   return function(reply) {
-    if(!(reply instanceof String)) {
+    if(typeof message != "string") {
       // Required to add image attachments
       reply.username = bot.identity.name;
+      reply.icon_url = bot.identity.icon;
     }
     bot.reply(message, reply);
   };
 }
 
+function sayer(bot, user, channel) {
+  return function(message) {
+    if(typeof message == "string") {
+      bot.say({ text: message, channel: channel });
+    } else {
+      message.username = bot.identity.name;
+      message.icon_url = bot.identity.icon;
+      message.channel = channel;
+      bot.say(message);
+    }
+  };
+}
+
+function scheduleDigest(user, channel, projectId, schedule, tz) {
+  return scheduler.scheduleInterval(user + channel + projectId, schedule, tz, function() {
+    var say = sayer(bot, user, channel);
+    say("Here's your digest!");
+    botData.getUserChannelData(user, channel).then(function(userData) {
+      var gcpClient = new GCPClient(jwtClient, say);
+      var monitorUserData = { projectId: userData.schedule.projectId };
+      return gcpClient.monitorMetricPack(monitorUserData, "simple");
+    }, userDataErrorHandler(say));
+  });
+}
+
+// Schedule all jobs that were saved
+botData.getAllUserData().then(function(allData) {
+  for(var i = 0; i < allData.length; i++) {
+    var data = allData[i];
+    var user = data.id;
+    for(var channel in data.channels) {
+      var channelData = data.channels[channel];
+      console.log('scheduling:', user, channel, channelData.schedule.projectId, channelData.schedule.schedule, channelData.schedule.tz);
+      var result = scheduleDigest(user, channel, channelData.projectId, channelData.schedule.schedule, channelData.schedule.tz);
+      if(!result) {
+        console.error('scheduling failed');
+      }
+    }
+  }
+});
 
 controller.on('bot_channel_join', function (bot, message) {
-  bot.reply(message, "I'm here!");
+  bot.reply(message, "I'm here! Type `gpcbot help` to see what I can do.");
 });
 
 controller.hears(['gcpbot project (.*)'], ['message_received','ambient'], function (bot, message) {
@@ -62,6 +106,34 @@ controller.hears(['gcpbot project (.*)'], ['message_received','ambient'], functi
   botData.saveUserChannelData(message.user, message.channel, data);
   bot.reply(message, 'Ok, using project `' + projectId + '` in this channel');
 });
+
+controller.hears(['gcpbot schedule (\\S+)(.*)?'], ['message_received','ambient'], function (bot, message) {
+  var projectId = message.match[1].trim();
+  var scheduleString = (message.match[2] || '0 9 * * *').trim(); // Default to every day at 9AM
+  console.log('projectId:', projectId, 'scheduleString:', scheduleString);
+  
+  // Fetch the user data so we know the time zone
+  botData.fetchUserInfo(message.user, bot).then(function(userInfo) {
+    // First do the actual scheduling
+    var tz = userInfo.user.tz;
+    var success = scheduleDigest(message.user, message.channel, projectId, scheduleString, tz);
+    
+    if(success) {
+      // Then save the data so it can be used later (especially on bot restart)
+      var channelData = { schedule: {
+          projectId: projectId,
+          schedule: scheduleString,
+          tz: tz
+      } };
+      botData.saveUserChannelData(message.user, message.channel, channelData);
+      bot.reply(message, 'Ok, I scheduled a digest for `' + scheduleString + '` in this channel');
+    } else {
+      // Or tell the user that the scheduling failed
+      bot.reply(message, 'I could not schedule a digest for `' + scheduleString + '`. Is something wrong with your cron string?');
+    }
+  }, function(err) {
+    bot.reply(message, 'Are you a real person?');
+  });
 });
 
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
@@ -104,6 +176,7 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
   var packs = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
   var help = 'I will respond to the following messages: \n' +
+      '`gcpbot schedule <projectId> <schedule>` to schedule a daily digest.\n' +
       '`gcpbot project <projectId>` to select a project to use for the other commands in this channel. This is a per user setting. You can change it at any time.\n' +
       '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
