@@ -1,4 +1,5 @@
 var Botkit = require('botkit');
+var firebaseStorage = require('botkit-storage-firebase');
 var CronJob = require('cron').CronJob;
 var google = require('googleapis');
 var yaml = require('yamljs');
@@ -19,6 +20,7 @@ function requireEnvVariable(name) {
 var slackToken = requireEnvVariable('SLACK_TOKEN');
 var private_key = requireEnvVariable('PRIVATE_KEY');
 var client_email = requireEnvVariable('CLIENT_EMAIL');
+var firebase_uri = process.env.FIREBASE_URI; // not required, defaults to JSON store
 
 var jwtClient = new google.auth.JWT(client_email, null, private_key,
   [
@@ -27,9 +29,14 @@ var jwtClient = new google.auth.JWT(client_email, null, private_key,
     'https://www.googleapis.com/auth/monitoring',
   ], null);
 
-var controller = Botkit.slackbot({
-  json_file_store: './userdata/'
-});
+var botkitOptions = {};
+if (firebase_uri) {
+  botkitOptions.storage = firebaseStorage({ firebase_uri: firebase_uri });
+} else {
+  botkitOptions.json_file_store = './userdata/';
+}
+
+var controller = Botkit.slackbot(botkitOptions);
 var botData = new BotData(controller);
 var scheduler = new Scheduler();
 var bot = controller.spawn({
@@ -85,7 +92,7 @@ botData.getAllUserData().then(function(allData) {
     var user = data.id;
     for(var channel in data.channels) {
       var channelData = data.channels[channel];
-      console.log('scheduling:', user, channel, channelData.schedule.projectId, channelData.schedule.schedule, channelData.schedule.tz);
+      console.log('scheduling user:', user, 'channel:', channel, 'project:', channelData.schedule.projectId, 'schedule:', channelData.schedule.schedule, 'timezone:', channelData.schedule.tz);
       var result = scheduleDigest(user, channel, channelData.projectId, channelData.schedule.schedule, channelData.schedule.tz);
       if(!result) {
         console.error('scheduling failed');
