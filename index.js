@@ -73,15 +73,22 @@ function sayer(bot, user, channel) {
   };
 }
 
-function scheduleDigest(user, channel, projectId, schedule, tz) {
-  return scheduler.scheduleInterval(user + channel + projectId, schedule, tz, function() {
-    var say = sayer(bot, user, channel);
-    say("Here's your digest!");
-    botData.getUserChannelData(user, channel).then(function(userData) {
-      var gcpClient = new GCPClient(jwtClient, say);
+function showDigest(user, channel) {
+  var say = sayer(bot, user, channel);
+  botData.getUserChannelData(user, channel).then(function(userData) {
+    var gcpClient = new GCPClient(jwtClient, say);
+    if(userData.schedule) {
       var monitorUserData = { projectId: userData.schedule.projectId };
       return gcpClient.monitorMetricPack(monitorUserData, "simple");
-    }, userDataErrorHandler(say));
+    } else {
+      say("You have no digest set up. Use `gcpbot schedule <projectId>` to schedule one.");
+    }
+  }, userDataErrorHandler(say));
+}
+
+function scheduleDigest(user, channel, projectId, schedule, tz) {
+  return scheduler.scheduleInterval(user + channel + projectId, schedule, tz, function() {
+    showDigest(user, channel);
   });
 }
 
@@ -92,10 +99,12 @@ botData.getAllUserData().then(function(allData) {
     var user = data.id;
     for(var channel in data.channels) {
       var channelData = data.channels[channel];
-      console.log('scheduling user:', user, 'channel:', channel, 'project:', channelData.schedule.projectId, 'schedule:', channelData.schedule.schedule, 'timezone:', channelData.schedule.tz);
-      var result = scheduleDigest(user, channel, channelData.projectId, channelData.schedule.schedule, channelData.schedule.tz);
-      if(!result) {
-        console.error('scheduling failed');
+      if(channelData.schedule) {
+        console.log('scheduling user:', user, 'channel:', channel, 'project:', channelData.schedule.projectId, 'schedule:', channelData.schedule.schedule, 'timezone:', channelData.schedule.tz);
+        var result = scheduleDigest(user, channel, channelData.projectId, channelData.schedule.schedule, channelData.schedule.tz);
+        if(!result) {
+          console.error('scheduling failed');
+        }
       }
     }
   }
@@ -143,6 +152,28 @@ controller.hears(['gcpbot schedule (\\S+)(.*)?'], ['message_received','ambient']
   });
 });
 
+controller.hears(['gcpbot unschedule'], ['message_received','ambient'], function (bot, message) {
+  botData.getUserChannelData(message.user, message.channel).then(function(userData) {
+    if(userData.schedule) {
+      var projectId = userData.schedule.projectId;
+      scheduler.cancel(message.user + message.channel + projectId);
+      delete userData.schedule;
+      return botData.saveUserChannelData(message.user, message.channel, userData, false).then(function() {
+        bot.reply(message, 'Ok, your digest for `' + projectId + '` has been cancelled.');
+      });
+    } else {
+      bot.reply(message, 'You have no digest scheduled.');
+    }
+  }, function(err) {
+    console.error('Error unscheduling digest:', err);
+    bot.reply(message, 'I could not unschedule this digest.');
+  });
+});
+
+controller.hears(['gcpbot digest'], ['message_received','ambient'], function (bot, message) {
+  showDigest(message.user, message.channel);
+});
+
 controller.hears(['gcpbot d(eploy)? detail (.*)'], ['message_received','ambient'], function (bot, message) {
   var gcpClient = new GCPClient(jwtClient, replier(bot, message));
   var depId = message.match[2].trim();
@@ -183,7 +214,9 @@ controller.hears(['gcpbot d(eploy)? new (.*) (.*)'], ['message_received','ambien
 controller.hears('gcpbot h(elp)?', ['message_received', 'ambient'], function (bot, message) {
   var packs = '`' + Object.keys(Metrics.packages).join('`, `') + '`';
   var help = 'I will respond to the following messages: \n' +
-      '`gcpbot schedule <projectId> <schedule>` to schedule a daily digest.\n' +
+      '`gcpbot schedule <projectId> <schedule>` to schedule a digest. Schedule is specified with cron syntax. Leave blank to schedule for 9am every morning.\n' +
+      '`gcpbot unschedule` to cancel a scheduled digest in this channel.\n' +
+      '`gcpbot digest` to show the currently scheduled digest now.\n' +
       '`gcpbot project <projectId>` to select a project to use for the other commands in this channel. This is a per user setting. You can change it at any time.\n' +
       '`gcpbot deploy list` for a list of all deployment manager jobs and their status.\n' +
       '`gcpbot deploy summary <email>` for a list of all deployment manager jobs initiated by the provided user and their status.\n' +
