@@ -13,3 +13,8 @@ config:
     info: The private_key from your gcp authn json file
     type: secret
     global: true
+  - name: FIREBASE_URI
+    friendly_name: Firebase URI
+    info: (Optional) Define the Firebase URI to store data in Firebase. Otherwise the bot stores data locally in JSON files.
+    type: text
+    global: true

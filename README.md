@@ -11,17 +11,16 @@ Visit [Beep Boop](https://beepboophq.com/docs/article/overview) to get the scoop
 
 ### Run locally
 	npm install
-	SLACK_TOKEN=<YOUR_SLACK_TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> PROJECT_ZONE=<YOUR_PROJECT_ZONE> npm start
+	SLACK_TOKEN=<YOUR_SLACK_TOKEN> CLIENT_EMAIL=<YOUR_GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL_ADDRESS> PRIVATE_KEY=<YOUR_GOOGLE_CLOUD_SERVICE_KEY> npm start
 
 Things are looking good if the console prints something like:
 
     ** API CALL: https://slack.com/api/rtm.start
-    ** BOT ID:  witty  ...attempting to connect to RTM!
-    ** API CALL: https://slack.com/api/chat.postMessage
+    ** BOT ID:  gcpdev  ...attempting to connect to RTM!
 
 ### Run locally in Docker
 	docker build -t starter-node .`
-	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> PROJECT_ID=<YOUR_GOOGLE_CLOUD_PROJECT> PROJECT_ZONE=<YOUR_PROJECT_ZONE> starter-node
+	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> CLIENT_EMAIL=<YOUR_GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL_ADDRESS> PRIVATE_KEY=<YOUR_GOOGLE_CLOUD_SERVICE_KEY> starter-node
 
 ### Run in BeepBoop
 If you have linked your local repo with the Beep Boop service (check [here](https://beepboophq.com/0_o/my-projects)), changes pushed to the remote master branch will automatically deploy.

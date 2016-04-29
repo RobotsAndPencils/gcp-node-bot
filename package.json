@@ -23,9 +23,9 @@
   "homepage": "https://github.com/beepboophq/node-slack-bot#readme",
   "dependencies": {
     "botkit": "0.0.5",
-    "gcloud": "^0.28.0",
+    "botkit-storage-firebase": "^1.0.0",
+    "cron": "^1.1.0",
     "googleapis": "google/google-api-nodejs-client",
-    "jsonfile": "^2.2.3",
     "promise": "^7.1.1",
     "request": "^2.69.0",
     "yamljs": "^0.2.7"
