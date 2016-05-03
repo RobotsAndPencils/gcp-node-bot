@@ -3,15 +3,20 @@ description: A bot to interact with Google Cloud Platform
 avatar: images/gcp-avatar.png
 #background: resources/background.png
 config:
-  - name: CLIENT_EMAIL
-    friendly_name:  Client Email
-    info: The client_email from your gcp authn json file
+  - name: GOOGLE_CLIENT_ID
+    friendly_name:  Google Client ID for OAuth
+    info: The Client ID from your gcp oauth config
     type: text
     global: true
-  - name: PRIVATE_KEY
+  - name: GOOGLE_CLIENT_SECRET
     friendly_name: Private Key
-    info: The private_key from your gcp authn json file
+    info: The Client secret from your gcp oauth config
     type: secret
+    global: true
+  - name: OAUTH_REDIRECT_URL
+    friendly_name:  Redirect URL for Google OAuth
+    info: One of the Authorized redirect URIs from your oauth config. e.g. https://beepboophq.com/proxy/BEEP_BOOP_PROJECT_ID/auth or http://localhost:3000/auth
+    type: text
     global: true
   - name: FIREBASE_URI
     friendly_name: Firebase URI
