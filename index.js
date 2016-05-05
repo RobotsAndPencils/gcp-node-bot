@@ -55,16 +55,25 @@ var app = express();
 app.get('/auth', function(req, res) {
   console.log('request at /auth');
   
-  var user = req.query.state;
   var code = req.query.code;
+  // Use the CSRF token to look up which user this is
+  var user = authCache.lookupUser(req.query.state);
+  if(!user) {
+    console.error('User not found for state', req.query.state);
+    res.send('This appears to be an old login url. You have not been authenticated.');
+    return;
+  }
+  // Now find their auth data
   authCache.lookupAuth(user).then(function(auth) {
     if(auth && auth.client) {
       var oauth2Client = auth.client;
+      // Use the auth data to get the tokens and put them in the client
       oauth2Client.getToken(code, function(err, tokens) {
         if(!err) {
           oauth2Client.setCredentials(tokens);
           auth.tokens = tokens;
           authCache.saveAuth(auth);
+          // Send the user a private message saying it was successful
           bot.api.im.open({user: user}, function (err, response) {
             if(err) { console.error(err); }
             bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
