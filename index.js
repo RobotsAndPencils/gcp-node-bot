@@ -18,13 +18,27 @@ var slackToken = requireEnvVariable('SLACK_TOKEN');
 var googleClientId = requireEnvVariable('GOOGLE_CLIENT_ID');
 var googleClientSecret = requireEnvVariable('GOOGLE_CLIENT_SECRET');
 var firebase_uri = process.env.FIREBASE_URI; // not required, defaults to JSON store
+var firebaseSecret = process.env.FIREBASE_SECRET; // not required, defaults to no auth on firebase
 var port = process.env.PORT || 3000; // not required, default to 3000
 var oauthRedirectUrl = process.env.OAUTH_REDIRECT_URL || 'http://localhost:' + port + '/auth'; // not required, default to localhost
 
 var botkitOptions = { retry: true };
 if (firebase_uri) {
   var firebaseStorage = require('botkit-storage-firebase');
-  botkitOptions.storage = firebaseStorage({ firebase_uri: firebase_uri });
+  botkitOptions.storage = firebaseStorage({ firebase_uri: firebase_uri });;
+  // If the firebase secret is passed, authenticate firebase
+  if(firebaseSecret) {
+    var FirebaseTokenGenerator = require("firebase-token-generator");
+    var tokenGenerator = new FirebaseTokenGenerator(firebaseSecret); // TODO: don't check this in...
+    var token = tokenGenerator.createToken({ uid: "1" }, { admin: true });
+    botkitOptions.storage.firebase.authWithCustomToken(token, function(error, authData) {
+      if (error) {
+        console.log("Firebase Login Failed!", error);
+      } else {
+        console.log("Firebase Login Succeeded!");
+      }
+    });
+  }
 } else {
   botkitOptions.json_file_store = './userdata/';
 }
