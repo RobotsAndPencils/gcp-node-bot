@@ -35,29 +35,34 @@ var authCache = new AuthCache(botData, {
   googleClientSecret: googleClientSecret, 
   oauthRedirectUrl: oauthRedirectUrl 
 });
-gcpbot(controller, slackToken, botData, authCache);
+var bot = gcpbot(controller, slackToken, botData, authCache);
 
 var app = express();
 app.get('/auth', function(req, res) {
   console.log('request at /auth');
   
   var user = req.query.state;
+  var code = req.query.code;
   authCache.lookupAuth(user).then(function(auth) {
     if(auth && auth.client) {
       var oauth2Client = auth.client;
-      oauth2Client.getToken(req.query.code, function(err, tokens) {
+      oauth2Client.getToken(code, function(err, tokens) {
         if(!err) {
           oauth2Client.setCredentials(tokens);
           auth.tokens = tokens;
           authCache.saveAuth(auth);
+          bot.api.im.open({user: user}, function (err, response) {
+            if(err) { console.error(err); }
+            bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
+          });
         } else {
           console.log('error authorizing...', err);
         }
       });
-      res.send('You have been authenticated...');
+      res.send('Thank you. You have been authenticated. You may close this page.');
     } else {
       console.error('requesting auth for user with no client...', user);
-      res.send('There was a problem trying to authenticate you.');
+      res.send('There was a problem trying to authenticate you. Try again?');
     }
   });
 });
