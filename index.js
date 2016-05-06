@@ -29,7 +29,7 @@ if (firebase_uri) {
   // If the firebase secret is passed, authenticate firebase
   if(firebaseSecret) {
     var FirebaseTokenGenerator = require("firebase-token-generator");
-    var tokenGenerator = new FirebaseTokenGenerator(firebaseSecret); // TODO: don't check this in...
+    var tokenGenerator = new FirebaseTokenGenerator(firebaseSecret);
     var token = tokenGenerator.createToken({ uid: "1" }, { admin: true });
     botkitOptions.storage.firebase.authWithCustomToken(token, function(error, authData) {
       if (error) {
@@ -56,6 +56,11 @@ app.get('/auth', function(req, res) {
   console.log('request at /auth');
   
   var code = req.query.code;
+  if(!code) {
+    console.error('No code in auth request', req.query.state);
+    res.send('Missing authentication code. You have not been authenticated.');
+    return;
+  }
   // Use the CSRF token to look up which user this is
   var user = authCache.lookupUser(req.query.state);
   if(!user) {
