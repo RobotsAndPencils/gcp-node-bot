@@ -23,8 +23,11 @@
   "homepage": "https://github.com/beepboophq/node-slack-bot#readme",
   "dependencies": {
     "botkit": "0.0.5",
-    "botkit-storage-firebase": "^1.0.0",
+    "botkit-storage-firebase": "https://github.com/echicken/botkit-storage-firebase/tarball/72a538548ac3e2157ecaacb1b4865646e5ebb241",
     "cron": "^1.1.0",
+    "csrf": "^3.0.1",
+    "express": "^4.13.4",
+    "firebase-token-generator": "^2.0.0",
     "googleapis": "google/google-api-nodejs-client",
     "promise": "^7.1.1",
     "request": "^2.69.0",

@@ -11,7 +11,7 @@ Visit [Beep Boop](https://beepboophq.com/docs/article/overview) to get the scoop
 
 ### Run locally
 	npm install
-	SLACK_TOKEN=<YOUR_SLACK_TOKEN> CLIENT_EMAIL=<YOUR_GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL_ADDRESS> PRIVATE_KEY=<YOUR_GOOGLE_CLOUD_SERVICE_KEY> npm start
+	SLACK_TOKEN=<YOUR_SLACK_TOKEN> GOOGLE_CLIENT_ID=<YOUR_GOOGLE_CLOUD_SERVICE_OAUTH_CLIENT_ID> GOOGLE_CLIENT_SECRET=<YOUR_GOOGLE_CLOUD_OAUTH_CLIENT_SECRET> npm start
 
 Things are looking good if the console prints something like:
 
@@ -20,7 +20,7 @@ Things are looking good if the console prints something like:
 
 ### Run locally in Docker
 	docker build -t starter-node .`
-	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> CLIENT_EMAIL=<YOUR_GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL_ADDRESS> PRIVATE_KEY=<YOUR_GOOGLE_CLOUD_SERVICE_KEY> starter-node
+	docker run --rm -it -e SLACK_TOKEN=<YOUR SLACK API TOKEN> GOOGLE_CLIENT_ID=<YOUR_GOOGLE_CLOUD_SERVICE_OAUTH_CLIENT_ID> GOOGLE_CLIENT_SECRET=<YOUR_GOOGLE_CLOUD_OAUTH_CLIENT_SECRET> starter-node
 
 ### Run in BeepBoop
 If you have linked your local repo with the Beep Boop service (check [here](https://beepboophq.com/0_o/my-projects)), changes pushed to the remote master branch will automatically deploy.
