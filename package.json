@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/beepboophq/node-slack-bot#readme",
   "dependencies": {
+    "beepboop-botkit": "^1.3.0",
     "botkit": "0.0.5",
     "botkit-storage-firebase": "https://github.com/echicken/botkit-storage-firebase/tarball/72a538548ac3e2157ecaacb1b4865646e5ebb241",
     "cron": "^1.1.0",
