@@ -31,6 +31,17 @@ If you have linked your local repo with the Beep Boop service (check [here](http
 
 The `deploy new` command relies on a publicly visible repo that has a valid yaml deployment file.  This is just a POC, and we'd probably want to use a remote template with command-line parameters supplied by the deployer.
 
+### Environment Variables
+
+GCPBot can be configured with a few different environment variables:
+
+	GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET - Your Google API credentials. Used to connect to Google APIs and get Oauth tokens for users. See (the Google API Manager)[https://console.developers.google.com/apis/credentials].
+
+	SLACK_TOKEN - provide this to connect to a single app. (Required if you are not connecting to BeepBoop)
+	BEEPBOOP_ID, BEEPBOOP_RESOURCER & BEEPBOOP_TOKEN - When these are provided they are used connect to the BeepBoop resourcer. See the [BeepBoop docs](https://beepboophq.com/docs/article/resourcer-api) for details.
+	
+	FIREBASE_URI, FIREBASE_SECRET - Specify a Firebase DB to save all user data. 
+
 ## Acknowledgements
 
 This code uses the [botkit](https://github.com/howdyai/botkit) npm module by the fine folks at Howdy.ai.
