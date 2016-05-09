@@ -14,13 +14,19 @@ function requireEnvVariable(name) {
 }
 
 // Expect a bunch of environment variables
-var slackToken = requireEnvVariable('SLACK_TOKEN');
+var slackToken = process.env.SLACK_TOKEN; // not required, defaults to connecting BeepBoop resourcer
 var googleClientId = requireEnvVariable('GOOGLE_CLIENT_ID');
 var googleClientSecret = requireEnvVariable('GOOGLE_CLIENT_SECRET');
 var firebase_uri = process.env.FIREBASE_URI; // not required, defaults to JSON store
 var firebaseSecret = process.env.FIREBASE_SECRET; // not required, defaults to no auth on firebase
 var port = process.env.PORT || 3000; // not required, default to 3000
 var oauthRedirectUrl = process.env.OAUTH_REDIRECT_URL || 'http://localhost:' + port + '/auth'; // not required, default to localhost
+// If ALL of the beep boop values are defined, don't use the slack token.
+if(process.env.BEEPBOOP_ID && process.env.BEEPBOOP_RESOURCER && process.env.BEEPBOOP_TOKEN) {
+  slackToken = undefined;
+} else if(!slackToken) {
+  throw new Error('Either SLACK_TOKEN or BeepBoop variables (BEEPBOOP_ID, BEEPBOOP_RESOURCER and BEEPBOOP_TOKEN) are required!');
+}
 
 var botkitOptions = { retry: true };
 if (firebase_uri) {
@@ -49,7 +55,7 @@ var authCache = new AuthCache(botData, {
   googleClientSecret: googleClientSecret, 
   oauthRedirectUrl: oauthRedirectUrl 
 });
-var bot = gcpbot(controller, slackToken, botData, authCache);
+var bots = gcpbot(controller, botData, authCache, slackToken);
 
 var app = express();
 app.get('/auth', function(req, res) {
@@ -79,6 +85,7 @@ app.get('/auth', function(req, res) {
           auth.tokens = tokens;
           authCache.saveAuth(auth);
           // Send the user a private message saying it was successful
+          var bot = bots[auth.teamId];
           bot.api.im.open({user: user}, function (err, response) {
             if(err) { console.error(err); }
             bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
