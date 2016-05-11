@@ -3,7 +3,7 @@ var express = require('express');
 var google = require('googleapis');
 var AuthCache = require('./lib/authcache.js');
 var BotData = require('./lib/botdata');
-var gcpbot = require('./lib/bot.js');
+var GCPBot = require('./lib/bot.js');
 
 function requireEnvVariable(name) {
   var value = process.env[name];
@@ -55,7 +55,8 @@ var authCache = new AuthCache(botData, {
   googleClientSecret: googleClientSecret, 
   oauthRedirectUrl: oauthRedirectUrl 
 });
-var bots = gcpbot(controller, botData, authCache, slackToken);
+var gcpBot = new GCPBot(controller, botData, authCache, slackToken);
+var bots = gcpBot.getBots();
 
 var app = express();
 app.get('/auth', function(req, res) {
