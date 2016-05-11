@@ -1,25 +1,29 @@
 name: gcpbot
 description: A bot to interact with Google Cloud Platform
 avatar: images/gcp-avatar.png
-#background: resources/background.png
 config:
   - name: GOOGLE_CLIENT_ID
-    friendly_name:  Google Client ID for OAuth
-    info: The Client ID from your gcp oauth config
+    friendly_name:  Google Client ID
+    info: The Client ID from your Google Cloud Platform OAuth config
     type: text
     global: true
   - name: GOOGLE_CLIENT_SECRET
-    friendly_name: Private Key
-    info: The Client secret from your gcp oauth config
+    friendly_name: Google Client Secret
+    info: The Client secret from your Google Cloud Platform OAuth config
     type: secret
     global: true
   - name: OAUTH_REDIRECT_URL
-    friendly_name:  Redirect URL for Google OAuth
-    info: One of the Authorized redirect URIs from your oauth config. e.g. https://beepboophq.com/proxy/BEEP_BOOP_PROJECT_ID/auth or http://localhost:3000/auth
+    friendly_name:  Redirect URL
+    info: One of the Authorized redirect URIs from your Google Cloud Platform OAuth config. e.g. https://beepboophq.com/proxy/BEEP_BOOP_PROJECT_ID/auth or http://localhost:3000/auth
     type: text
     global: true
   - name: FIREBASE_URI
     friendly_name: Firebase URI
     info: (Optional) Define the Firebase URI to store data in Firebase. Otherwise the bot stores data locally in JSON files.
+    type: text
+    global: true
+  - name: FIREBASE_SECRET
+    friendly_name: Firebase Secret
+    info: (Optional) The secret token to use for firebase authentication.
     type: text
     global: true
