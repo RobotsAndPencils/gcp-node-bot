@@ -3,7 +3,7 @@ var express = require('express');
 var google = require('googleapis');
 var AuthCache = require('./lib/authcache.js');
 var BotData = require('./lib/botdata');
-var gcpbot = require('./lib/bot.js');
+var GCPBot = require('./lib/bot.js');
 
 function requireEnvVariable(name) {
   var value = process.env[name];
@@ -31,7 +31,7 @@ if(process.env.BEEPBOOP_ID && process.env.BEEPBOOP_RESOURCER && process.env.BEEP
 var botkitOptions = { retry: true };
 if (firebase_uri) {
   var firebaseStorage = require('botkit-storage-firebase');
-  botkitOptions.storage = firebaseStorage({ firebase_uri: firebase_uri });;
+  botkitOptions.storage = firebaseStorage({ firebase_uri: firebase_uri });
   // If the firebase secret is passed, authenticate firebase
   if(firebaseSecret) {
     var FirebaseTokenGenerator = require("firebase-token-generator");
@@ -55,7 +55,8 @@ var authCache = new AuthCache(botData, {
   googleClientSecret: googleClientSecret, 
   oauthRedirectUrl: oauthRedirectUrl 
 });
-var bots = gcpbot(controller, botData, authCache, slackToken);
+var gcpBot = new GCPBot(controller, botData, authCache, slackToken);
+var bots = gcpBot.getBots();
 
 var app = express();
 app.get('/auth', function(req, res) {
@@ -86,10 +87,14 @@ app.get('/auth', function(req, res) {
           authCache.saveAuth(auth);
           // Send the user a private message saying it was successful
           var bot = bots[auth.teamId];
-          bot.api.im.open({user: user}, function (err, response) {
-            if(err) { console.error(err); }
-            bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
-          });
+          if(bot) {
+            bot.api.im.open({user: user}, function (err, response) {
+              if(err) { console.error(err); }
+              bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
+            });
+          } else {
+            console.error("No bot for team:", auth.teamId);
+          }
         } else {
           console.log('error authorizing...', err);
         }
