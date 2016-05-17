@@ -89,8 +89,11 @@ app.get('/auth', function(req, res) {
           var bot = bots[auth.teamId];
           if(bot) {
             bot.api.im.open({user: user}, function (err, response) {
-              if(err) { console.error(err); }
-              bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
+              if(err) { 
+                console.error('Error opening IM with user', user, 'on team:', auth.teamId, ': ', err); 
+              } else {
+                bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
+              }
             });
           } else {
             console.error("No bot for team:", auth.teamId);
