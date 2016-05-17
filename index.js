@@ -81,32 +81,34 @@ app.get('/auth', function(req, res) {
       var oauth2Client = auth.client;
       // Use the auth data to get the tokens and put them in the client
       oauth2Client.getToken(code, function(err, tokens) {
-        if(!err) {
-          oauth2Client.setCredentials(tokens);
-          auth.tokens = tokens;
-          authCache.saveAuth(auth);
-          // Send the user a private message saying it was successful
-          var bot = bots[auth.teamId];
-          if(bot) {
-            bot.api.im.open({user: user}, function (err, response) {
-              if(err) { 
-                console.error('Error opening IM with user', user, 'on team:', auth.teamId, ': ', err); 
-              } else {
-                bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
-              }
-            });
-          } else {
-            console.error("No bot for team:", auth.teamId);
-          }
-        } else {
-          console.log('error authorizing...', err);
+        if(err) {
+          console.log('Error authorizing...', err);
+          return;
         }
+        oauth2Client.setCredentials(tokens);
+        auth.tokens = tokens;
+        authCache.saveAuth(auth);
+        // Send the user a private message saying it was successful
+        var bot = bots[auth.teamId];
+        if(!bot) {
+          console.error("No bot for team:", auth.teamId);
+          return;
+        }
+        bot.api.im.open({user: user}, function (err, response) {
+          if(err) { 
+            console.error('Error opening IM with user', user, 'on team:', auth.teamId, ': ', err); 
+          } else {
+            bot.say({ text: "🔑 Success! Authorization complete.", channel: response.channel.id });
+          }
+        });
       });
       res.send('Thank you. You have been authenticated. You may close this page.');
     } else {
       console.error('requesting auth for user with no client...', user);
       res.send('There was a problem trying to authenticate you. Try again?');
     }
+  }).catch(function(error) {
+    console.error(error);
   });
 });
 
