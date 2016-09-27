@@ -39,8 +39,8 @@ GCPBot can be configured with a few different environment variables:
 
 	SLACK_TOKEN - provide this to connect to a single app. (Required if you are not connecting to BeepBoop)
 	BEEPBOOP_ID, BEEPBOOP_RESOURCER & BEEPBOOP_TOKEN - When these are provided they are used connect to the BeepBoop resourcer. See the [BeepBoop docs](https://beepboophq.com/docs/article/resourcer-api) for details.
-	
-	FIREBASE_URI, FIREBASE_SECRET - Specify a Firebase DB to save all user data. 
+
+	FIREBASE_URI, FIREBASE_SECRET - Specify a Firebase DB to save all user data.
 
 ## Acknowledgements
 

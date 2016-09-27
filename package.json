@@ -1,38 +1,47 @@
 {
-  "name": "node-slack-bot",
+  "name": "ea-support-bot",
   "version": "1.0.0",
-  "description": "A sample Beep Boop Node.js Slackbot",
+  "description": "EA Support bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "npm run lint && npm run coverage",
+    "lint": "standard",
+    "unit": "ava --verbose --serial",
+    "coverage": "nyc --check-coverage --statements 80 ava --verbose --serial",
+    "lcov": "nyc --reporter lcov ava --serial",
+    "watch": "ava --verbose --serial --watch"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/beepboophq/node-slack-bot.git"
+    "url": "git+https://github.com/RobotsAndPencils/ea-support-bot.git"
   },
   "keywords": [
-    "slackbot",
-    "bot",
-    "slack"
+    "ea",
+    "slackbot"
   ],
-  "author": "",
+  "author": "Curtis Allen <curtis.allen@robotsandpencils.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/beepboophq/node-slack-bot/issues"
+    "url": "https://github.com/RobotsAndPencils/ea-support-bot/issues"
   },
-  "homepage": "https://github.com/beepboophq/node-slack-bot#readme",
+  "homepage": "https://github.com/RobotsAndPencils/ea-support-bot#readme",
+  "engines": {
+    "node": ">=6.0.0"
+  },
   "dependencies": {
-    "beepboop-botkit": "^1.4.0",
-    "botkit": "^0.2.1",
-    "botkit-storage-firebase": "https://github.com/echicken/botkit-storage-firebase/tarball/72a538548ac3e2157ecaacb1b4865646e5ebb241",
-    "cron": "^1.1.0",
-    "csrf": "^3.0.1",
-    "express": "^4.13.4",
-    "firebase-token-generator": "^2.0.0",
-    "gcloud": "^0.34.0",
-    "googleapis": "google/google-api-nodejs-client",
-    "promise": "^7.1.1",
-    "request": "^2.69.0",
-    "yamljs": "^0.2.7"
+    "beepboop-slapp-presence-polyfill": "^1.1.1",
+    "express": "^4.14.0",
+    "slapp": "^1.2.0",
+    "slapp-context-beepboop": "^1.0.0",
+    "slapp-convo-beepboop": "^1.0.0"
+  },
+  "devDependencies": {
+    "ava": "^0.15.2",
+    "dox": "^0.8.1",
+    "nodemon": "^1.10.2",
+    "nyc": "^7.0.0",
+    "sinon": "^1.17.4",
+    "standard": "^7.1.2"
   }
 }
